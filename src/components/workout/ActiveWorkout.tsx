@@ -12,6 +12,8 @@ import {
   History,
   Info,
   ListChecks,
+  Pause,
+  Play,
   Plus,
   SkipForward,
   Trash2,
@@ -19,10 +21,10 @@ import {
 } from "lucide-react";
 import type { ConditioningDraft, LoggedSet, SessionExercise, WorkoutSession } from "@/lib/types";
 import { useAppState } from "@/lib/store";
-import { buildSessionExercise, discardActive, emptySet, toggleActiveSet, updateActive } from "@/lib/actions";
+import { buildSessionExercise, discardActive, emptySet, pauseActive, resumeActive, toggleActiveSet, updateActive } from "@/lib/actions";
 import { previousPerformance } from "@/lib/metrics";
 import { useNow } from "@/lib/hooks";
-import { cn, formatDate, formatDuration, formatWeight } from "@/lib/utils";
+import { cn, elapsedSec, formatDate, formatDuration, formatWeight } from "@/lib/utils";
 import { Badge, Button, Card, Checkbox, ConfirmDialog, ProgressBar, Textarea } from "../ui";
 import { ExercisePicker } from "../ExercisePicker";
 import { RestTimer } from "./RestTimer";
@@ -69,7 +71,8 @@ export function ActiveWorkout({ session, onFinished }: { session: WorkoutSession
   const planned = state.plan.workouts.find((w) => w.id === session.plannedWorkoutId);
 
   const prev = useMemo(() => (ex ? previousPerformance(state, ex.exerciseId) : null), [state, ex]);
-  const elapsed = Math.max(0, Math.floor((now - new Date(session.startedAt).getTime()) / 1000));
+  const elapsed = elapsedSec(session.startedAt, session.pausedAt, session.pausedSec, now);
+  const paused = session.pausedAt !== null;
 
   const doneCount = session.exercises.filter((e) => e.status !== "pending").length + (hasConditioning && (session.conditioning!.completedRounds > 0 || !session.conditioning!.enabled) ? 1 : 0);
   const completedSets = session.exercises.reduce((n, e) => n + e.sets.filter((s) => s.completed).length, 0);
@@ -138,10 +141,17 @@ export function ActiveWorkout({ session, onFinished }: { session: WorkoutSession
             <h1 className="mt-1 font-display text-2xl font-bold uppercase leading-tight sm:text-3xl">{session.workoutName}</h1>
           </div>
           <div className="shrink-0 text-right">
-            <p className="font-display text-2xl font-bold tabular" aria-label={`Session duration ${formatDuration(elapsed)}`}>
+            <p className={cn("font-display text-2xl font-bold tabular", paused && "text-warn")} aria-label={`Session duration ${formatDuration(elapsed)}`}>
               {formatDuration(elapsed)}
             </p>
-            <p className="text-[11px] text-good">● Saved automatically</p>
+            <button
+              type="button"
+              onClick={() => (paused ? resumeActive() : pauseActive())}
+              className={cn("mt-1 inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold", paused ? "bg-accent text-accent-ink" : "bg-surface-3 text-text")}
+            >
+              {paused ? <Play size={13} /> : <Pause size={13} />} {paused ? "Resume" : "Pause"}
+            </button>
+            <p className="mt-1 text-[11px] text-good">● Saved automatically</p>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3">
@@ -150,6 +160,11 @@ export function ActiveWorkout({ session, onFinished }: { session: WorkoutSession
             {doneCount}/{totalSteps} · {completedSets} sets
           </span>
         </div>
+        {paused && (
+          <p className="mt-3 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn" role="status">
+            Paused — the session clock is stopped. Your sets are saved; resume whenever you&apos;re ready.
+          </p>
+        )}
         {(session.reducedVolume || session.modified) && (
           <div className="mt-3 flex flex-wrap gap-2">
             {session.reducedVolume && <Badge tone="warn">Reduced volume</Badge>}

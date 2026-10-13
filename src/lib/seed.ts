@@ -1,6 +1,7 @@
 import type {
   AppState,
   ConditioningOption,
+  DaySlot,
   Exercise,
   PlannedExercise,
   PlannedWorkout,
@@ -11,7 +12,7 @@ import type {
 } from "./types";
 import { startOfWeek, todayISO } from "./utils";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 const SEED_TIME = "2026-01-01T00:00:00.000Z";
 
 type ExerciseSeed = Omit<Exercise, "isCustom" | "isFavorite" | "createdAt" | "updatedAt">;
@@ -867,20 +868,39 @@ const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
 ];
 
-const DRILL_SEEDS: Omit<SkillDrill, "createdAt" | "isCustom">[] = [
-  { id: "drill-mikan", name: "Mikan drill", description: "Alternating layups under the rim.", metrics: ["makes", "attempts"] },
+type DrillSeed = Omit<SkillDrill, "createdAt" | "isCustom">;
+
+const DRILL_SEEDS: DrillSeed[] = [
+  /* ------------------------------- Shooting ------------------------------- */
   {
-    id: "drill-finishes",
-    name: "Left/right-hand finishes",
-    description: "Finishes off one dribble, logged by hand.",
-    metrics: ["leftMakes", "leftAttempts", "rightMakes", "rightAttempts"],
+    id: "drill-form-shooting",
+    name: "Form shooting",
+    description: "One-hand close-range shooting for a clean release.",
+    metrics: ["makes", "attempts"],
+    homeCourt: true,
+    category: "Shooting",
+    target: "3 spots × 10 attempts, 1–3 steps from the rim",
+    instructions: [
+      "Start one step from the rim, directly in front.",
+      "Shooting hand only: elbow under the ball, finish with a high follow-through and hold it.",
+      "Step back only when you make most shots with a clean swish or soft bank.",
+    ],
+    partner: "none",
   },
-  { id: "drill-drop-steps", name: "Drop steps", description: "Reps per side.", metrics: ["leftReps", "rightReps"] },
   {
-    id: "drill-jump-hooks",
-    name: "Jump hooks",
-    description: "Makes and attempts by hand.",
-    metrics: ["leftMakes", "leftAttempts", "rightMakes", "rightAttempts"],
+    id: "drill-midrange",
+    name: "Midrange shooting",
+    description: "Elbows, short corners and the free-throw line extended.",
+    metrics: ["makes", "attempts"],
+    homeCourt: true,
+    category: "Shooting",
+    target: "5 spots × 5 attempts",
+    instructions: [
+      "Pick five spots 10–15 feet from the rim (use chalk or cones in the driveway).",
+      "Square up, shoot 5 from each spot, rebound your own shot.",
+      "Log makes and attempts for the whole set.",
+    ],
+    partner: "none",
   },
   {
     id: "drill-free-throws",
@@ -888,20 +908,213 @@ const DRILL_SEEDS: Omit<SkillDrill, "createdAt" | "isCustom">[] = [
     description: "Made out of 20 or another chosen number.",
     metrics: ["makes", "attempts"],
     defaultAttempts: 20,
+    homeCourt: true,
+    category: "Shooting",
+    target: "20 attempts in pairs",
+    instructions: [
+      "Mark a line 15 feet from the backboard if your driveway has no lines.",
+      "Same routine every shot. Shoot in pairs and walk away between pairs, like a game.",
+    ],
+    partner: "none",
   },
-  { id: "drill-midrange", name: "Midrange shots", description: "Elbows and short corners.", metrics: ["makes", "attempts"] },
-  { id: "drill-rebounding", name: "Rebounding drills", description: "Completed rebounding reps.", metrics: ["reps"] },
+  {
+    id: "drill-catch-shoot",
+    name: "Catch-and-shoot",
+    description: "Partner passes, you catch ready and shoot.",
+    metrics: ["makes", "attempts"],
+    homeCourt: true,
+    category: "Shooting",
+    target: "3 × 10 attempts",
+    instructions: [
+      "Partner passes from under the rim. Show your hands, catch on the hop, shoot in rhythm.",
+      "Rotate between three spots.",
+    ],
+    partner: "required",
+  },
+  {
+    id: "drill-move-shoot",
+    name: "Shooting after controlled movement",
+    description: "Self-pass or one dribble into a balanced shot.",
+    metrics: ["makes", "attempts"],
+    homeCourt: true,
+    category: "Shooting",
+    target: "3 × 8 attempts",
+    instructions: [
+      "Spin the ball out to yourself, step into the catch with balanced feet, then shoot.",
+      "Alternate a one-dribble pull-up going left and right. Stay controlled — balance before speed.",
+    ],
+    partner: "none",
+  },
+  /* ----------------------------- Center skills ----------------------------- */
+  {
+    id: "drill-mikan",
+    name: "Mikan drill",
+    description: "Alternating layups under the rim.",
+    metrics: ["makes", "attempts"],
+    homeCourt: true,
+    category: "Center skills",
+    target: "3 × 10 makes",
+    instructions: [
+      "Right-hand layup off the glass from the right side, catch it before it hits the ground.",
+      "Step across and finish left-handed on the left side. Keep the ball high the whole time.",
+    ],
+    partner: "none",
+  },
+  {
+    id: "drill-reverse-mikan",
+    name: "Reverse Mikan",
+    description: "Reverse layups under the rim with both hands.",
+    metrics: ["makes", "attempts"],
+    homeCourt: true,
+    category: "Center skills",
+    target: "3 × 10 makes",
+    instructions: [
+      "Start under the rim facing the baseline.",
+      "Finish reverse layups, alternating sides and hands, without bringing the ball below your chin.",
+    ],
+    partner: "none",
+  },
+  {
+    id: "drill-drop-steps",
+    name: "Drop steps",
+    description: "Drop-step footwork on both sides, reps per side.",
+    metrics: ["leftReps", "rightReps"],
+    homeCourt: true,
+    category: "Center skills",
+    target: "3 × 5 per side",
+    instructions: [
+      "Self-pass to the block, catch with your back to the hoop and ball chinned.",
+      "Drop your baseline foot to seal, power up off two feet and finish strong.",
+      "Count a rep as successful when the footwork is clean and the finish is under control.",
+    ],
+    partner: "none",
+  },
+  {
+    id: "drill-jump-hooks",
+    name: "Jump hooks",
+    description: "Makes and attempts with each hand.",
+    metrics: ["leftMakes", "leftAttempts", "rightMakes", "rightAttempts"],
+    homeCourt: true,
+    category: "Center skills",
+    target: "3 × 5 per hand",
+    instructions: [
+      "From the block, pivot into the lane with shoulders square to the baseline.",
+      "Jump off two feet, release at the top, shield the ball with your off arm. Log each hand separately.",
+    ],
+    partner: "none",
+  },
+  {
+    id: "drill-pivot-finish",
+    name: "Pivot and finish",
+    description: "Front/reverse pivot into a power finish.",
+    metrics: ["makes", "attempts"],
+    homeCourt: true,
+    category: "Center skills",
+    target: "3 × 6 attempts",
+    instructions: [
+      "Catch on the block, establish a pivot foot, front-pivot or reverse-pivot to face the rim.",
+      "Finish with a power layup or short hook. Alternate pivot feet each rep.",
+    ],
+    partner: "none",
+  },
+  {
+    id: "drill-finishes",
+    name: "Left/right-hand finishes",
+    description: "Finishes off one dribble, logged by hand.",
+    metrics: ["leftMakes", "leftAttempts", "rightMakes", "rightAttempts"],
+    homeCourt: true,
+    category: "Center skills",
+    target: "3 × 5 per hand",
+    instructions: ["From the low block, one power dribble, finish with the hand away from the defender."],
+    partner: "none",
+  },
   {
     id: "drill-outlet",
-    name: "Outlet-pass accuracy",
-    description: "Accurate outlets out of total, when measurable.",
+    name: "Rebounding & outlet passes",
+    description: "Secure the rebound, pivot, outlet. Accurate outlets out of total.",
     metrics: ["accurate", "total"],
+    homeCourt: true,
+    category: "Center skills",
+    target: "3 × 5 reps",
+    instructions: [
+      "Toss the ball off the backboard, box out an imaginary opponent, and grab it at its highest point with two hands.",
+      "Land balanced, chin the ball, pivot outside and outlet to a partner — or to a wall/target spot when alone.",
+    ],
+    partner: "optional",
+  },
+  { id: "drill-rebounding", name: "Rebounding drills", description: "Completed rebounding reps.", metrics: ["reps"] },
+  /* --------------------------- Footwork & defense --------------------------- */
+  {
+    id: "drill-pivots",
+    name: "Front and reverse pivots",
+    description: "Pivot footwork without travelling.",
+    metrics: ["reps"],
+    homeCourt: true,
+    category: "Footwork & defense",
+    target: "2 × 10 each direction",
+    instructions: [
+      "Hold the ball chinned in triple-threat. Keep one pivot foot planted.",
+      "Front pivot 90°/180°, then reverse pivot. Switch pivot foot halfway.",
+    ],
+    partner: "none",
   },
   {
     id: "drill-def-footwork",
-    name: "Defensive footwork",
-    description: "Slides, closeouts and stance work.",
-    metrics: ["minutes", "reps"],
+    name: "Defensive slides (short distance)",
+    description: "Slides across 4–5 steps of driveway.",
+    metrics: ["reps"],
+    homeCourt: true,
+    category: "Footwork & defense",
+    target: "3 × 10–15 seconds",
+    instructions: [
+      "Wide stance, hips low, hands active. Slide 4–5 steps without clicking your heels, then change direction.",
+      "Log the number of sets you completed.",
+    ],
+    partner: "none",
+    safety: "Use a dry, even surface. Shorten the distance on slippery or uneven concrete.",
+  },
+  {
+    id: "drill-closeouts",
+    name: "Controlled closeouts and stops",
+    description: "Approach, chop your steps, stop balanced.",
+    metrics: ["reps"],
+    homeCourt: true,
+    category: "Footwork & defense",
+    target: "3 × 3 reps",
+    instructions: [
+      "Start under the rim, move out toward a spot, chop your feet as you arrive, and finish in a balanced stance with a high hand.",
+      "Hold the stop for one second. Quality over speed.",
+    ],
+    partner: "none",
+  },
+  {
+    id: "drill-balance",
+    name: "Balance and positioning",
+    description: "Post stance, seal position and single-leg balance.",
+    metrics: [],
+    homeCourt: true,
+    category: "Footwork & defense",
+    target: "2 × 30 seconds each position",
+    instructions: [
+      "Hold a wide post-up stance with a low base and arm bar for 30 seconds.",
+      "Single-leg balance 20–30 seconds each leg, then quarter-squat on one leg slowly × 5.",
+    ],
+    partner: "none",
+  },
+  {
+    id: "drill-accelerations",
+    name: "Short accelerations",
+    description: "5–10 yard starts at 70–80% effort.",
+    metrics: [],
+    homeCourt: true,
+    category: "Footwork & defense",
+    target: "4–6 reps",
+    instructions: [
+      "From an athletic stance, accelerate 5–10 yards at 70–80% effort, then slow down gradually.",
+      "Walk back for recovery between reps.",
+    ],
+    partner: "none",
+    safety: "Only when the surface is dry, even and you have room to slow down safely — skip it otherwise.",
   },
 ];
 
@@ -938,8 +1151,12 @@ export function seedWorkouts(): PlannedWorkout[] {
     {
       id: "pw-day1",
       dayNumber: 1,
+      label: "Day A",
       name: "Lower-Body Strength & Power",
-      focus: "Leg strength, controlled power and core stability",
+      focus: "Lower-body strength, stability and controlled power — without unnecessary fatigue before basketball",
+      kind: "strength",
+      emphasis: "lower",
+      location: "gym",
       weekday: 1,
       warmup: [
         W("d1w1", "Bike or brisk walk: 4–5 minutes"),
@@ -965,10 +1182,14 @@ export function seedWorkouts(): PlannedWorkout[] {
     },
     {
       id: "pw-day2",
-      dayNumber: 2,
+      dayNumber: 4,
+      label: "Optional",
       name: "Speed, Conditioning & Defense",
-      focus: "Acceleration, defensive footwork and interval conditioning",
-      weekday: 2,
+      focus: "Acceleration, defensive footwork and interval conditioning — optional, not scheduled by default",
+      kind: "basketball",
+      emphasis: "speed",
+      location: "court",
+      weekday: null,
       warmup: [
         W("d2w1", "Easy bike or jog: 4 minutes"),
         W("d2w2", "Marching with active arm swings: 30 seconds"),
@@ -996,10 +1217,14 @@ export function seedWorkouts(): PlannedWorkout[] {
     },
     {
       id: "pw-day3",
-      dayNumber: 3,
+      dayNumber: 2,
+      label: "Day B",
       name: "Upper-Body Strength & Core",
-      focus: "Pressing, pulling and anti-rotation core strength",
-      weekday: 4,
+      focus: "Chest, back, shoulders, arms and anti-rotation core strength",
+      kind: "strength",
+      emphasis: "upper",
+      location: "gym",
+      weekday: 3,
       warmup: [
         W("d3w1", "Easy bike or treadmill walk: 4 minutes"),
         W("d3w2", "Arm circles: 10 in each direction"),
@@ -1024,9 +1249,13 @@ export function seedWorkouts(): PlannedWorkout[] {
     },
     {
       id: "pw-day4",
-      dayNumber: 4,
+      dayNumber: 3,
+      label: "Center Skills",
       name: "Center Skills & Basketball Conditioning",
-      focus: "Finishing, post moves, rebounding and free throws",
+      focus: "Drop steps, jump hooks, footwork, rebounding, shooting and optional conditioning — driveway or court",
+      kind: "basketball",
+      emphasis: "skills",
+      location: "home",
       weekday: 6,
       warmup: [
         W("d4w1", "Easy jogging or brisk walking: 3 minutes"),
@@ -1049,10 +1278,36 @@ export function seedWorkouts(): PlannedWorkout[] {
       ],
       guidance: [
         "Track attempts, makes, hand and notes for all shooting drills.",
-        "Skip or replace the conditioning finisher after a game or when fatigued.",
+        "Rebounding and outlet passes need a partner for true outlets — solo, toss off the backboard and outlet to a wall or target.",
+        "The conditioning finisher is optional: skip or shorten it after open gym, a game, or when fatigued.",
+        "You can do a Home Court session instead — it counts for this slot.",
       ],
       updatedAt: SEED_TIME,
     },
+  ];
+}
+
+export function seedDaySlots(): DaySlot[] {
+  return [
+    {
+      weekday: 2,
+      kind: "open-gym",
+      label: "Optional open gym",
+      description: "Live basketball, defensive positioning, rebounding and game decisions. Go only if you want to.",
+    },
+    {
+      weekday: 4,
+      kind: "flex",
+      label: "Your choice",
+      description: "Open gym, a Home Court workout, recovery, or rest — pick what fits the week.",
+    },
+    {
+      weekday: 5,
+      kind: "recovery",
+      label: "Recovery or light shooting",
+      description: "Easy shooting or mobility if you feel like it. No workout required.",
+    },
+    { weekday: 0, kind: "rest", label: "Rest day", description: "No mandatory workout." },
   ];
 }
 
@@ -1112,11 +1367,7 @@ export function seedPlan(): TrainingPlan {
       },
     ],
     workouts: seedWorkouts(),
-    restDays: [
-      { weekday: 3, label: "Recovery or optional easy movement" },
-      { weekday: 5, label: "Recovery or optional easy movement" },
-      { weekday: 0, label: "Rest day" },
-    ],
+    daySlots: seedDaySlots(),
     weekAdjustments: [],
     updatedAt: SEED_TIME,
   };
@@ -1130,6 +1381,10 @@ export function seedDrills(): SkillDrill[] {
   return DRILL_SEEDS.map((d) => ({ ...d, isCustom: false, createdAt: SEED_TIME }));
 }
 
+export const DEFAULT_ENVIRONMENT = "Full gym, basketball hoop, and a large driveway at home";
+export const DEFAULT_GOAL =
+  "Improve basketball skills, center footwork, shooting, strength, speed, conditioning, defensive mobility, and overall athletic performance";
+
 export function defaultProfile(): UserProfile {
   const now = new Date().toISOString();
   return {
@@ -1140,17 +1395,23 @@ export function defaultProfile(): UserProfile {
     showBodyWeight: false,
     experience: "Experienced",
     daysPerWeek: 4,
-    trainingEnvironment: "Full gym and basketball court",
-    position: "Center",
-    mainGoal: "Become a more complete basketball center",
+    strengthPerWeek: 2,
+    basketballPerWeek: 2,
+    openGymDays: [1, 2, 3, 4],
+    trainingEnvironment: DEFAULT_ENVIRONMENT,
+    position: "Center / big man",
+    mainGoal: DEFAULT_GOAL,
     priorities: [
+      "Consistency",
       "Strength",
       "Speed",
       "Conditioning",
-      "Athletic fitness",
-      "Post skills",
+      "Shooting",
+      "Center footwork",
+      "Defensive mobility",
       "Rebounding",
-      "Defense",
+      "Recovery",
+      "Long-term progress",
       "Supporting healthy growth",
     ],
     planWeeks: 8,
@@ -1179,6 +1440,9 @@ export function createInitialState(): AppState {
     recoveryEntries: [],
     calendarEvents: [],
     progressionDecisions: [],
+    openGymSessions: [],
+    activeHomeSession: null,
+    dismissedAdvice: [],
     updatedAt: new Date().toISOString(),
   };
 }

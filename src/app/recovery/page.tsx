@@ -37,6 +37,7 @@ export default function RecoveryPage() {
       readiness: e?.readiness ?? null,
       energy: e?.energy ?? null,
       soreness: e?.soreness ?? null,
+      fatigue: e?.fatigue ?? null,
       sleep: e?.sleepHours ?? null,
     };
   });
@@ -44,7 +45,7 @@ export default function RecoveryPage() {
 
   return (
     <div>
-      <PageHeader title="Recovery" subtitle="A quick daily check-in. Suggestions are conservative training adjustments — never a diagnosis." />
+      <PageHeader title="Recovery" subtitle="A quick, optional daily check-in. Suggestions are conservative training adjustments — never a diagnosis." />
 
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
@@ -70,6 +71,7 @@ export default function RecoveryPage() {
               <Stat label="Sleep (7d)" value={avg7.sleepHours !== null ? `${avg7.sleepHours.toFixed(1)} h` : "—"} sub="average per night" />
               <Stat label="Energy (7d)" value={avg7.energy?.toFixed(1) ?? "—"} sub="average, 1–5" />
               <Stat label="Soreness (7d)" value={avg7.soreness?.toFixed(1) ?? "—"} sub="1 none – 5 very" />
+              <Stat label="Fatigue (7d)" value={avg7.fatigue?.toFixed(1) ?? "—"} sub="1 fresh – 5 exhausted" />
             </div>
           )}
         </div>
@@ -85,16 +87,28 @@ export default function RecoveryPage() {
         <>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardTitle sub="Last 21 days, 1–5 scale">Readiness, energy & soreness</CardTitle>
+              <CardTitle sub="Last 21 days, 1–5 scale (higher is better)">Readiness & energy</CardTitle>
               <SimpleLineChart
                 data={chart}
                 xKey="label"
                 domain={[1, 5]}
-                label="Readiness, energy and soreness over the last 21 days"
+                label="Readiness and energy over the last 21 days"
                 series={[
                   { key: "readiness", name: "Readiness" },
-                  { key: "energy", name: "Energy" },
-                  { key: "soreness", name: "Soreness" },
+                  { key: "energy", name: "Energy", color: "var(--chart-2)" },
+                ]}
+              />
+            </Card>
+            <Card>
+              <CardTitle sub="Last 21 days, 1–5 scale (higher means more tired or sore)">Soreness & fatigue</CardTitle>
+              <SimpleLineChart
+                data={chart}
+                xKey="label"
+                domain={[1, 5]}
+                label="Muscle soreness and perceived fatigue over the last 21 days"
+                series={[
+                  { key: "soreness", name: "Soreness", color: "var(--chart-2)" },
+                  { key: "fatigue", name: "Fatigue", color: "var(--chart-3)" },
                 ]}
               />
             </Card>
@@ -114,6 +128,7 @@ export default function RecoveryPage() {
                     <th className="py-2 font-medium">Sleep</th>
                     <th className="py-2 font-medium">Readiness</th>
                     <th className="py-2 font-medium">Soreness</th>
+                    <th className="py-2 font-medium">Fatigue</th>
                     <th className="py-2 font-medium">Training</th>
                     <th className="py-2" />
                   </tr>
@@ -124,13 +139,20 @@ export default function RecoveryPage() {
                     const trained = sessions.filter((s) => s.date === d);
                     const cond = state.conditioningSessions.filter((c) => c.date === d && !c.workoutSessionId);
                     const skills = state.skillSessions.filter((s) => s.date === d);
-                    const activity = [...trained.map((s) => s.workoutName.replace(/^Day \d — /, "")), ...cond.map(() => "Conditioning"), ...skills.map(() => "Skills")];
+                    const og = state.openGymSessions.filter((o) => o.date === d && o.status === "attended");
+                    const activity = [
+                      ...trained.map((s) => s.workoutName.replace(/^[^—]+— /, "")),
+                      ...og.map((o) => `Open gym${o.intensity ? ` (${o.intensity})` : ""}`),
+                      ...cond.map(() => "Conditioning"),
+                      ...skills.map((s) => (s.kind === "home-court" ? `Home Court${s.intensity ? ` (${s.intensity})` : ""}` : "Skills")),
+                    ];
                     return (
                       <tr key={d} className="border-b border-line">
                         <td className="py-2.5 whitespace-nowrap">{formatDate(d, { weekday: "short", month: "short", day: "numeric" })}</td>
                         <td className="tabular">{e?.sleepHours != null ? `${e.sleepHours} h` : "—"}</td>
-                        <td>{e ? <ScoreDot value={e.readiness} /> : <span className="text-subtle">—</span>}</td>
-                        <td>{e ? <ScoreDot value={e.soreness} invert /> : <span className="text-subtle">—</span>}</td>
+                        <td>{e?.readiness != null ? <ScoreDot value={e.readiness} /> : <span className="text-subtle">—</span>}</td>
+                        <td>{e?.soreness != null ? <ScoreDot value={e.soreness} invert /> : <span className="text-subtle">—</span>}</td>
+                        <td>{e?.fatigue != null ? <ScoreDot value={e.fatigue} invert /> : <span className="text-subtle">—</span>}</td>
                         <td className="text-muted">
                           {activity.length ? activity.join(", ") : e?.dayType === "rest" ? "Rest" : e?.dayType === "active-recovery" ? "Active recovery" : <span className="text-subtle">—</span>}
                         </td>
@@ -188,6 +210,7 @@ function CheckInForm({ date, existing, onSaved }: { date: string; existing: Reco
   const [energy, setEnergy] = useState<number | null>(existing?.energy ?? null);
   const [soreness, setSoreness] = useState<number | null>(existing?.soreness ?? null);
   const [readiness, setReadiness] = useState<number | null>(existing?.readiness ?? null);
+  const [fatigue, setFatigue] = useState<number | null>(existing?.fatigue ?? null);
   const [dayType, setDayType] = useState<RecoveryEntry["dayType"]>(existing?.dayType ?? "training");
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -205,20 +228,19 @@ function CheckInForm({ date, existing, onSaved }: { date: string; existing: Reco
     const errs: Record<string, string> = {};
     const sh = sleepHours.trim() === "" ? null : Number(sleepHours);
     if (sh !== null && (!Number.isFinite(sh) || sh < 0 || sh > 24)) errs.sleepHours = "Enter hours between 0 and 24.";
-    if (!sleepQuality) errs.sleepQuality = "Rate your sleep quality.";
-    if (!energy) errs.energy = "Rate your energy.";
-    if (!soreness) errs.soreness = "Rate your muscle soreness.";
-    if (!readiness) errs.readiness = "Rate your readiness.";
+    const anything = sh !== null || sleepQuality || energy || soreness || readiness || fatigue || notes.trim() || dayType !== "training";
+    if (!anything) errs.form = "Fill in at least one item — every field is optional, but an empty check-in can't be saved.";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     saveRecovery({
       id: existing?.id ?? uid("rc"),
       date,
       sleepHours: sh,
-      sleepQuality: sleepQuality!,
-      energy: energy!,
-      soreness: soreness!,
-      readiness: readiness!,
+      sleepQuality,
+      energy,
+      soreness,
+      readiness,
+      fatigue,
       dayType,
       notes: notes.trim(),
       createdAt: existing?.createdAt ?? nowISO(),
@@ -242,23 +264,23 @@ function CheckInForm({ date, existing, onSaved }: { date: string; existing: Reco
       </Field>
       <div>
         <p className="mb-1.5 text-sm font-medium">Sleep quality</p>
-        <Rating label="Sleep quality" value={sleepQuality} onChange={d(setSleepQuality)} lowLabel="Poor" highLabel="Great" />
-        {err("sleepQuality")}
+        <Rating label="Sleep quality" value={sleepQuality} onChange={d(setSleepQuality)} onClear={() => d(setSleepQuality)(null)} lowLabel="Poor" highLabel="Great" />
       </div>
       <div>
         <p className="mb-1.5 text-sm font-medium">Energy</p>
-        <Rating label="Energy" value={energy} onChange={d(setEnergy)} lowLabel="Drained" highLabel="Energized" />
-        {err("energy")}
+        <Rating label="Energy" value={energy} onChange={d(setEnergy)} onClear={() => d(setEnergy)(null)} lowLabel="Drained" highLabel="Energized" />
       </div>
       <div>
         <p className="mb-1.5 text-sm font-medium">Muscle soreness</p>
-        <Rating label="Muscle soreness" value={soreness} onChange={d(setSoreness)} lowLabel="None" highLabel="Very sore" />
-        {err("soreness")}
+        <Rating label="Muscle soreness" value={soreness} onChange={d(setSoreness)} onClear={() => d(setSoreness)(null)} lowLabel="None" highLabel="Very sore" />
       </div>
       <div>
         <p className="mb-1.5 text-sm font-medium">General readiness to train</p>
-        <Rating label="Readiness" value={readiness} onChange={d(setReadiness)} lowLabel="Not ready" highLabel="Ready" />
-        {err("readiness")}
+        <Rating label="Readiness" value={readiness} onChange={d(setReadiness)} onClear={() => d(setReadiness)(null)} lowLabel="Not ready" highLabel="Ready" />
+      </div>
+      <div>
+        <p className="mb-1.5 text-sm font-medium">Perceived fatigue</p>
+        <Rating label="Perceived fatigue" value={fatigue} onChange={d(setFatigue)} onClear={() => d(setFatigue)(null)} lowLabel="Fresh" highLabel="Exhausted" />
       </div>
       <div>
         <p className="mb-1.5 text-sm font-medium">Today is a…</p>
@@ -267,6 +289,8 @@ function CheckInForm({ date, existing, onSaved }: { date: string; existing: Reco
       <Field label="Notes (optional)" htmlFor="rc-notes">
         <Textarea id="rc-notes" value={notes} onChange={(e) => d(setNotes)(e.target.value)} placeholder="Anything affecting recovery — schedule, stress, a game yesterday…" />
       </Field>
+      <p className="text-xs text-subtle">Every item is optional — log what you know. Tap a selected rating again to clear it.</p>
+      {err("form")}
       <div className={cn("flex justify-end")}>
         <Button type="submit" size="lg" className="w-full sm:w-auto">
           {existing ? "Update check-in" : "Save check-in"}

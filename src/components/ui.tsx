@@ -367,10 +367,27 @@ export function Segmented<T extends string | number>({
 }
 
 /** 1–5 (or 1–10) rating as a segmented control. */
-export function Rating({ value, onChange, label, max = 5, lowLabel, highLabel }: { value: number | null; onChange: (v: number) => void; label: string; max?: number; lowLabel?: string; highLabel?: string }) {
+export function Rating({
+  value,
+  onChange,
+  onClear,
+  label,
+  max = 5,
+  lowLabel,
+  highLabel,
+}: {
+  value: number | null;
+  onChange: (v: number) => void;
+  /** When provided, tapping the selected value again clears it. */
+  onClear?: () => void;
+  label: string;
+  max?: number;
+  lowLabel?: string;
+  highLabel?: string;
+}) {
   return (
     <div>
-      <Segmented label={label} value={value} onChange={onChange} options={Array.from({ length: max }, (_, i) => ({ value: i + 1, label: i + 1 }))} />
+      <Segmented label={label} value={value} onChange={(v) => (onClear && v === value ? onClear() : onChange(v))} options={Array.from({ length: max }, (_, i) => ({ value: i + 1, label: i + 1 }))} />
       {(lowLabel || highLabel) && (
         <div className="mt-1 flex justify-between text-[11px] text-subtle">
           <span>{lowLabel}</span>

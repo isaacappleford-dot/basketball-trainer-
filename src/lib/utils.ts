@@ -150,3 +150,9 @@ export function downloadFile(filename: string, content: string, mime: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/** Elapsed seconds for a pausable session clock. */
+export function elapsedSec(startedAt: string, pausedAt: number | null, pausedSec: number, now: number): number {
+  const end = pausedAt ?? now;
+  return Math.max(0, Math.floor((end - new Date(startedAt).getTime()) / 1000) - (pausedSec || 0));
+}

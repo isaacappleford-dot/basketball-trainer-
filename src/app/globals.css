@@ -25,6 +25,7 @@
   --chart-1: #dc7024;
   --chart-2: #4a8ae0;
   --chart-3: #2fa877;
+  --chart-4: #a77ce0;
   --grid: #26282c;
   color-scheme: dark;
 }
@@ -52,6 +53,7 @@
   --chart-1: #d9650f;
   --chart-2: #2f6fd0;
   --chart-3: #178a5c;
+  --chart-4: #8a5cc8;
   --grid: #ebebe7;
   color-scheme: light;
 }

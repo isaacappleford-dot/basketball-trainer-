@@ -2,15 +2,15 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Database, Download, Monitor, Moon, Palette, RotateCcw, Sun, Upload, User } from "lucide-react";
+import { Database, Download, Monitor, Moon, Palette, RotateCcw, Sun, Upload, User, Users } from "lucide-react";
 import type { AppState } from "@/lib/types";
 import { useAppState } from "@/lib/store";
-import { importState, resetAllData, setWorkoutWeekday, updateProfile } from "@/lib/actions";
+import { importState, resetAllData, setOpenGymDays, setWorkoutWeekday, updateProfile } from "@/lib/actions";
 import { makeBackup, validateBackup } from "@/lib/storage";
 import { CSV_DATASETS, toCSV, type CsvDataset } from "@/lib/exporters";
-import { downloadFile, formatDate, todayISO, WEEKDAYS } from "@/lib/utils";
+import { cn, downloadFile, formatDate, todayISO, WEEK_ORDER, WEEKDAYS, WEEKDAYS_SHORT } from "@/lib/utils";
 import { ProfileForm } from "@/components/ProfileForm";
-import { Alert, Button, Card, CardTitle, Field, Input, Modal, PageHeader, Segmented, Select, useToast } from "@/components/ui";
+import { Alert, Button, Card, CardTitle, Field, Input, Modal, NumberStepper, PageHeader, Segmented, Select, useToast } from "@/components/ui";
 
 export default function SettingsPage() {
   const state = useAppState();
@@ -60,6 +60,7 @@ export default function SettingsPage() {
     ["Skills sessions", s.skillSessions.length],
     ["Conditioning", s.conditioningSessions.length],
     ["Check-ins", s.recoveryEntries.length],
+    ["Open gym", (s.openGymSessions ?? []).length],
     ["Calendar events", s.calendarEvents.length],
     ["Exercises", s.exercises.length],
   ];
@@ -104,15 +105,17 @@ export default function SettingsPage() {
                 .sort((a, b) => a.dayNumber - b.dayNumber)
                 .map((w) => (
                   <li key={w.id}>
-                    <Field label={`Day ${w.dayNumber} — ${w.name}`} htmlFor={`set-day-${w.id}`}>
+                    <Field label={`${w.label} — ${w.name}`} htmlFor={`set-day-${w.id}`}>
                       <Select
                         id={`set-day-${w.id}`}
-                        value={w.weekday}
+                        value={w.weekday ?? ""}
                         onChange={(e) => {
-                          setWorkoutWeekday(w.id, Number(e.target.value));
-                          toast(`Day ${w.dayNumber} now on ${WEEKDAYS[Number(e.target.value)]}.`);
+                          const v = e.target.value === "" ? null : Number(e.target.value);
+                          setWorkoutWeekday(w.id, v);
+                          toast(v === null ? `${w.label} is now optional (not scheduled).` : `${w.label} now on ${WEEKDAYS[v]}.`);
                         }}
                       >
+                        <option value="">Not scheduled (optional)</option>
                         {WEEKDAYS.map((d, i) => (
                           <option key={d} value={i}>
                             {d}
@@ -126,6 +129,40 @@ export default function SettingsPage() {
             <Link href="/plan" className="mt-3 inline-block text-sm text-accent hover:underline">
               Edit exercises, sets and rest in Workout Plan →
             </Link>
+          </Card>
+
+          <Card>
+            <CardTitle icon={<Users size={16} />} sub="Days open gym is available. Availability is never a commitment — you choose when to go.">
+              Open gym days
+            </CardTitle>
+            <div className="grid grid-cols-7 gap-1" role="group" aria-label="Open gym days">
+              {WEEK_ORDER.map((d) => {
+                const on = state.profile.openGymDays.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setOpenGymDays(on ? state.profile.openGymDays.filter((x) => x !== d) : [...state.profile.openGymDays, d])}
+                    className={cn("h-11 rounded-xl text-xs font-semibold", on ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted hover:text-text")}
+                  >
+                    {WEEKDAYS_SHORT[d]}
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card>
+            <CardTitle sub="Defaults: two strength and two basketball-focused sessions">Weekly targets</CardTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Strength sessions" htmlFor="tg-str">
+                <NumberStepper id="tg-str" label="Strength sessions per week" value={state.profile.strengthPerWeek} min={0} max={5} onChange={(v) => updateProfile({ strengthPerWeek: v ?? 0 })} />
+              </Field>
+              <Field label="Basketball sessions" htmlFor="tg-bb">
+                <NumberStepper id="tg-bb" label="Basketball sessions per week" value={state.profile.basketballPerWeek} min={0} max={6} onChange={(v) => updateProfile({ basketballPerWeek: v ?? 0 })} />
+              </Field>
+            </div>
           </Card>
         </div>
       </div>

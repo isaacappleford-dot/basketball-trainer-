@@ -7,6 +7,7 @@ import { useAppState } from "@/lib/store";
 import { updatePlannedWorkout } from "@/lib/actions";
 import { uid, WEEKDAYS } from "@/lib/utils";
 import { MODALITY_LABELS } from "./ProfileForm";
+import { LOCATION_LABELS } from "./labels";
 import { ExercisePicker } from "./ExercisePicker";
 import { Alert, Button, ConfirmDialog, Field, IconButton, Input, Modal, Select, Textarea, useToast } from "./ui";
 
@@ -37,6 +38,7 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
   const save = () => {
     const errs: string[] = [];
     if (!draft.name.trim()) errs.push("Workout name is required.");
+    if (!draft.label.trim()) errs.push("Short label is required.");
     draft.exercises.forEach((e) => {
       if (!(e.sets >= 1 && e.sets <= 10)) errs.push(`${name(e.exerciseId)}: sets must be 1–10.`);
       if (!(e.repMin >= 0 && e.repMax >= e.repMin)) errs.push(`${name(e.exerciseId)}: rep range minimum must not exceed maximum.`);
@@ -50,6 +52,7 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
     updatePlannedWorkout({
       ...draft,
       name: draft.name.trim(),
+      label: draft.label.trim(),
       warmup: draft.warmup.filter((w) => w.text.trim()),
       exercises: draft.exercises.map((e) => ({ ...e, repsLabel: e.repsLabel.trim() || (e.repMin === e.repMax ? String(e.repMin) : `${e.repMin}–${e.repMax}`) })),
     });
@@ -66,7 +69,7 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
         open
         size="lg"
         onClose={requestClose}
-        title={`Edit Day ${draft.dayNumber}`}
+        title={`Edit ${draft.label}`}
         footer={
           <>
             <Button variant="secondary" onClick={requestClose}>
@@ -91,12 +94,39 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
               <Input id="we-name" value={draft.name} onChange={(e) => set({ name: e.target.value })} />
             </Field>
             <Field label="Scheduled day" htmlFor="we-day">
-              <Select id="we-day" value={draft.weekday} onChange={(e) => set({ weekday: Number(e.target.value) })}>
+              <Select id="we-day" value={draft.weekday ?? ""} onChange={(e) => set({ weekday: e.target.value === "" ? null : Number(e.target.value) })}>
+                <option value="">Not scheduled (optional)</option>
                 {WEEKDAYS.map((d, i) => (
                   <option key={d} value={i}>
                     {d}
                   </option>
                 ))}
+              </Select>
+            </Field>
+            <Field label="Short label" htmlFor="we-label">
+              <Input id="we-label" value={draft.label} onChange={(e) => set({ label: e.target.value })} maxLength={16} />
+            </Field>
+            <Field label="Session type" htmlFor="we-kind" hint="Strength days count toward 2 gym sessions; basketball days toward 2 basketball sessions.">
+              <Select id="we-kind" value={draft.kind} onChange={(e) => set({ kind: e.target.value as PlannedWorkout["kind"] })}>
+                <option value="strength">Strength (gym)</option>
+                <option value="basketball">Basketball-focused</option>
+              </Select>
+            </Field>
+            <Field label="Location" htmlFor="we-loc">
+              <Select id="we-loc" value={draft.location} onChange={(e) => set({ location: e.target.value as PlannedWorkout["location"] })}>
+                {(Object.keys(LOCATION_LABELS) as PlannedWorkout["location"][]).map((l) => (
+                  <option key={l} value={l}>
+                    {LOCATION_LABELS[l]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Emphasis" htmlFor="we-emph" hint="Used to avoid stacking hard leg days before basketball.">
+              <Select id="we-emph" value={draft.emphasis} onChange={(e) => set({ emphasis: e.target.value as PlannedWorkout["emphasis"] })}>
+                <option value="lower">Lower body</option>
+                <option value="upper">Upper body</option>
+                <option value="skills">Skills</option>
+                <option value="speed">Speed & conditioning</option>
               </Select>
             </Field>
             <Field label="Focus" htmlFor="we-focus" className="sm:col-span-2">
@@ -140,7 +170,7 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
                       <Trash2 size={16} />
                     </IconButton>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
                     <Field label="Sets" htmlFor={`${e.id}-sets`}>
                       <Input id={`${e.id}-sets`} type="number" inputMode="numeric" value={e.sets} onChange={(ev) => setEx(i, { sets: num(ev.target.value) })} />
                     </Field>
@@ -153,7 +183,16 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
                     <Field label="Rest (s)" htmlFor={`${e.id}-rest`}>
                       <Input id={`${e.id}-rest`} type="number" inputMode="numeric" value={e.restSec} onChange={(ev) => setEx(i, { restSec: num(ev.target.value) })} />
                     </Field>
-                    <Field label="Type" htmlFor={`${e.id}-role`} className="col-span-2 sm:col-span-1">
+                    <Field label={`Weight (${state.profile.units})`} htmlFor={`${e.id}-wt`} hint="Optional">
+                      <Input
+                        id={`${e.id}-wt`}
+                        type="number"
+                        inputMode="decimal"
+                        value={e.targetWeight ?? ""}
+                        onChange={(ev) => setEx(i, { targetWeight: ev.target.value === "" ? null : Math.max(0, Number(ev.target.value)) })}
+                      />
+                    </Field>
+                    <Field label="Type" htmlFor={`${e.id}-role`}>
                       <Select id={`${e.id}-role`} value={e.role} onChange={(ev) => setEx(i, { role: ev.target.value as PlannedExercise["role"] })}>
                         <option value="main">Main</option>
                         <option value="accessory">Accessory</option>

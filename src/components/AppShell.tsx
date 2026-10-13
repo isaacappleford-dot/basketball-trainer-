@@ -10,12 +10,14 @@ import {
   CalendarDays,
   ClipboardList,
   HeartPulse,
+  House,
   LayoutDashboard,
   MoreHorizontal,
   Play,
   Settings,
   Target,
   TrendingUp,
+  Users,
   X,
 } from "lucide-react";
 import { dismissLoadError, useStore } from "@/lib/store";
@@ -27,6 +29,8 @@ export const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/plan", label: "Workout Plan", icon: ClipboardList },
   { href: "/workout", label: "Start Workout", icon: Play },
+  { href: "/open-gym", label: "Open Gym", icon: Users },
+  { href: "/home-court", label: "Home Court", icon: House },
   { href: "/progress", label: "Progress", icon: TrendingUp },
   { href: "/skills", label: "Basketball Skills", icon: Target },
   { href: "/conditioning", label: "Conditioning", icon: HeartPulse },
@@ -132,7 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     >
                       <Icon size={18} aria-hidden />
                       {label}
-                      {href === "/workout" && active && <span className="ml-auto h-2 w-2 rounded-full bg-accent" aria-label="Workout in progress" />}
+                      {((href === "/workout" && active) || (href === "/home-court" && snap.state.activeHomeSession)) && <span className="ml-auto h-2 w-2 rounded-full bg-accent" aria-label="Workout in progress" />}
                     </Link>
                   </li>
                 );
@@ -161,6 +165,19 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="font-semibold text-accent">Workout in progress</span> · {active.workoutName}
                 </span>
                 <Link href="/workout" className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink">
+                  Resume
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {snap.state.activeHomeSession && !pathname.startsWith("/home-court") && (
+            <div className="border-b border-accent/30 bg-accent-soft px-4 py-2.5 text-sm">
+              <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+                <span className="truncate">
+                  <span className="font-semibold text-accent">Home Court session in progress</span> · {snap.state.activeHomeSession.title}
+                </span>
+                <Link href="/home-court" className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink">
                   Resume
                 </Link>
               </div>

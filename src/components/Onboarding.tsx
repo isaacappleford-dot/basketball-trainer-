@@ -9,7 +9,7 @@ import { Card, useToast } from "./ui";
 export function Onboarding() {
   const state = useAppState();
   const toast = useToast();
-  const days = [...state.plan.workouts].sort((a, b) => a.dayNumber - b.dayNumber);
+  const days = [...state.plan.workouts].filter((w) => w.weekday !== null).sort((a, b) => ((a.weekday! + 6) % 7) - ((b.weekday! + 6) % 7));
 
   return (
     <div className="mx-auto min-h-dvh max-w-3xl px-4 py-10 sm:px-6 sm:py-16">
@@ -18,26 +18,35 @@ export function Onboarding() {
         Center <span className="text-accent">Performance</span>
       </h1>
       <p className="mt-4 max-w-xl text-muted">
-        An 8-week, four-day plan to become a more complete basketball center — strength, speed, conditioning, post skills, rebounding and
-        defense. Confirm your profile to get started. Everything stays on this device.
+        A flexible plan for a center: lift twice a week, hit open gym on the days you pick, and use your driveway for extra skill work —
+        without stacking too many hard days together. Confirm your profile to get started. Everything stays on this device.
       </p>
 
       <Card className="mt-8">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted">Your four-day week</h2>
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted">Your flexible week</h2>
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {days.map((w) => (
-            <li key={w.id} className="flex items-center gap-3 rounded-xl bg-surface-2 p-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft font-display text-lg font-bold text-accent">
-                {w.dayNumber}
+            <li key={w.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-surface-2 p-3">
+              <span className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft px-2 font-display text-xs font-bold uppercase text-accent">
+                {w.label.replace("Day ", "")}
               </span>
               <span className="min-w-0">
-                <span className="block text-xs text-subtle">{WEEKDAYS[w.weekday]}</span>
+                <span className="block text-xs text-subtle">{WEEKDAYS[w.weekday!]}</span>
                 <span className="block truncate text-sm font-medium">{w.name}</span>
               </span>
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-subtle">Wednesday and Friday are recovery or easy-movement days. Sunday is rest.</p>
+        <ul className="mt-3 space-y-1 text-xs text-subtle">
+          {state.plan.daySlots.map((d) => (
+            <li key={d.weekday}>
+              <span className="text-muted">{WEEKDAYS[d.weekday]}:</span> {d.label} — {d.description}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-subtle">
+          Two gym strength days and two basketball-focused sessions per week. Open gym is available Monday–Thursday, but you choose when to go. Everything can be moved, skipped or swapped.
+        </p>
       </Card>
 
       <Card className="mt-6">

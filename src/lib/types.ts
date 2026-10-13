@@ -35,6 +35,11 @@ export interface UserProfile {
   showBodyWeight: boolean;
   experience: "Beginner" | "Intermediate" | "Experienced";
   daysPerWeek: number;
+  /** Weekly targets: two strength sessions and two basketball-focused sessions by default. */
+  strengthPerWeek: number;
+  basketballPerWeek: number;
+  /** Weekdays (0–6) when open gym is available. Availability is never a commitment. */
+  openGymDays: number[];
   trainingEnvironment: string;
   position: string;
   mainGoal: string;
@@ -119,6 +124,8 @@ export interface PlannedExercise {
   repsLabel: string;
   restSec: number;
   role: "main" | "accessory" | "skill" | "movement";
+  /** Optional working weight set by you in the plan editor (profile units). */
+  targetWeight?: number | null;
   notes: string;
 }
 
@@ -132,13 +139,24 @@ export interface ConditioningOption {
   note: string;
 }
 
+export type WorkoutKind = "strength" | "basketball";
+export type SessionLocation = "gym" | "home" | "open-gym" | "court";
+export type Intensity = "light" | "moderate" | "hard";
+
 export interface PlannedWorkout {
   id: ID;
+  /** Sort order only. */
   dayNumber: number;
+  /** Short display label, e.g. "Day A". */
+  label: string;
   name: string;
   focus: string;
-  /** 0 = Sunday … 6 = Saturday. */
-  weekday: number;
+  kind: WorkoutKind;
+  /** Body emphasis, used to avoid stacking intense lower-body work before hard sessions. */
+  emphasis: "lower" | "upper" | "skills" | "speed";
+  location: SessionLocation;
+  /** 0 = Sunday … 6 = Saturday; null = optional, not scheduled by default. */
+  weekday: number | null;
   warmup: WarmupItem[];
   exercises: PlannedExercise[];
   conditioning: ConditioningOption[];
@@ -153,6 +171,15 @@ export interface PlanPhase {
   title: string;
   focus: string;
   guidance: string[];
+}
+
+export type DaySlotKind = "open-gym" | "flex" | "recovery" | "rest";
+
+export interface DaySlot {
+  weekday: number;
+  kind: DaySlotKind;
+  label: string;
+  description: string;
 }
 
 export interface WeekAdjustment {
@@ -170,8 +197,8 @@ export interface TrainingPlan {
   weeks: number;
   phases: PlanPhase[];
   workouts: PlannedWorkout[];
-  /** Weekday notes for non-training days (0–6). */
-  restDays: { weekday: number; label: string }[];
+  /** What non-workout weekdays are for. Defaults, never obligations. */
+  daySlots: DaySlot[];
   weekAdjustments: WeekAdjustment[];
   updatedAt: Timestamp;
 }
@@ -269,6 +296,15 @@ export interface WorkoutSession {
   reducedVolume: boolean;
   modified: { reason: ModificationReason; note: string } | null;
   notes: string;
+  /** Snapshot of the planned workout kind at start. */
+  kind: WorkoutKind | "custom";
+  location: SessionLocation;
+  intensity: Intensity | null;
+  /** "complete" when every planned exercise was done or deliberately skipped. */
+  completion: "complete" | "partial" | null;
+  /** Pause tracking: epoch ms paused at, and total paused seconds. */
+  pausedAt: number | null;
+  pausedSec: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -287,14 +323,24 @@ export type SkillMetricKey =
   | "total"
   | "minutes";
 
+export type HomeDrillCategory = "Shooting" | "Center skills" | "Footwork & defense";
+
 export interface SkillDrill {
   id: ID;
   name: string;
   description: string;
+  /** Empty = simple completion tracking. */
   metrics: SkillMetricKey[];
   defaultAttempts?: number;
   isCustom: boolean;
   createdAt: Timestamp;
+  /** Home Court metadata (driveway-friendly drills). */
+  homeCourt?: boolean;
+  category?: HomeDrillCategory;
+  instructions?: string[];
+  target?: string;
+  partner?: "none" | "optional" | "required";
+  safety?: string;
 }
 
 export interface SkillResult {
@@ -303,7 +349,15 @@ export interface SkillResult {
   /** Snapshot of drill name. */
   drillName: string;
   values: Partial<Record<SkillMetricKey, number>>;
+  /** Completion checkbox (Home Court sessions). */
+  completed?: boolean;
   notes: string;
+}
+
+/** Links a session to the planned occurrence it fulfils or replaces. */
+export interface OccurrenceRef {
+  plannedWorkoutId: ID;
+  originalDate: ISODate;
 }
 
 export interface SkillSession {
@@ -312,6 +366,12 @@ export interface SkillSession {
   results: SkillResult[];
   gameNotes: string;
   notes: string;
+  /** "home-court" sessions come from the guided Home Court flow. */
+  kind?: "skills" | "home-court";
+  location?: SessionLocation;
+  durationMin?: number | null;
+  intensity?: Intensity | null;
+  countsFor?: OccurrenceRef | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -340,10 +400,13 @@ export interface RecoveryEntry {
   id: ID;
   date: ISODate;
   sleepHours: number | null;
-  sleepQuality: number;
-  energy: number;
-  soreness: number;
-  readiness: number;
+  /** All ratings 1–5 and optional. */
+  sleepQuality: number | null;
+  energy: number | null;
+  soreness: number | null;
+  readiness: number | null;
+  /** Perceived fatigue 1 (fresh) – 5 (exhausted). */
+  fatigue: number | null;
   dayType: "training" | "rest" | "active-recovery";
   notes: string;
   createdAt: Timestamp;
@@ -363,7 +426,7 @@ export interface PersonalRecord {
   sourceId: ID;
 }
 
-export type CalendarEventType = "workout" | "game" | "practice" | "rest" | "other";
+export type CalendarEventType = "workout" | "game" | "practice" | "rest" | "recovery" | "other";
 
 /**
  * Calendar records. For `workout` events these are schedule overrides of a
@@ -379,6 +442,10 @@ export interface CalendarEvent {
   originalDate: ISODate | null;
   status: "scheduled" | "skipped" | "modified";
   modifiedReason: ModificationReason | null;
+  /** Workout override: do a different planned workout in this slot. */
+  swapWorkoutId?: ID | null;
+  /** Workout override: start with reduced volume (from a fatigue suggestion). */
+  reduce?: boolean;
   notes: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -397,6 +464,55 @@ export interface ProgressionDecision {
   createdAt: Timestamp;
 }
 
+export type OpenGymStatus = "planned" | "attended" | "skipped" | "replaced";
+
+export interface OpenGymSession {
+  id: ID;
+  date: ISODate;
+  status: OpenGymStatus;
+  /** What was done instead, when status is "replaced". */
+  replacedWith: string;
+  durationMin: number | null;
+  intensity: Intensity | null;
+  /** Perceived effort 1–10, optional. */
+  effort: number | null;
+  format: "full-court" | "half-court" | "drills" | null;
+  skills: string[];
+  /** Lots of hard running — used to trim extra conditioning that week. */
+  hardRunning: boolean;
+  /**
+   * Explicit link to a planned workout this open gym stands in for. Basketball
+   * workouts count as completed; strength workouts are only marked "replaced".
+   */
+  countsFor: OccurrenceRef | null;
+  notes: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface HomeSessionItem {
+  id: ID;
+  drillId: ID;
+  drillName: string;
+  completed: boolean;
+  values: Partial<Record<SkillMetricKey, number>>;
+  notes: string;
+}
+
+/** In-progress Home Court session (persisted so closing the app loses nothing). */
+export interface HomeSessionDraft {
+  id: ID;
+  date: ISODate;
+  title: string;
+  startedAt: Timestamp;
+  pausedAt: number | null;
+  pausedSec: number;
+  partner: boolean;
+  items: HomeSessionItem[];
+  countsFor: OccurrenceRef | null;
+  notes: string;
+}
+
 export interface AppState {
   schemaVersion: number;
   profile: UserProfile;
@@ -410,5 +526,9 @@ export interface AppState {
   recoveryEntries: RecoveryEntry[];
   calendarEvents: CalendarEvent[];
   progressionDecisions: ProgressionDecision[];
+  openGymSessions: OpenGymSession[];
+  activeHomeSession: HomeSessionDraft | null;
+  /** Ids of scheduling suggestions the athlete dismissed. */
+  dismissedAdvice: string[];
   updatedAt: Timestamp;
 }

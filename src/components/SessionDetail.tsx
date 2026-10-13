@@ -6,6 +6,7 @@ import { sessionTotals } from "@/lib/metrics";
 import { MODALITY_LABELS } from "./ProfileForm";
 import { formatLongDate, formatPct, formatWeight, percentage } from "@/lib/utils";
 import { Badge } from "./ui";
+import { INTENSITY_LABELS, LOCATION_LABELS } from "./labels";
 
 function setText(s: LoggedSet, e: SessionExercise) {
   const side = s.side && s.side !== "both" ? ` (${s.side})` : "";
@@ -45,6 +46,9 @@ export function SessionDetail({ session }: { session: WorkoutSession }) {
           <Badge>
             {t.exercisesCompleted} exercises · {t.totalSets} sets
           </Badge>
+          <Badge>{LOCATION_LABELS[session.location ?? "gym"]}</Badge>
+          {session.intensity && <Badge tone={session.intensity === "hard" ? "warn" : "neutral"}>{INTENSITY_LABELS[session.intensity]}</Badge>}
+          {session.completion && <Badge tone={session.completion === "complete" ? "good" : "neutral"}>{session.completion === "complete" ? "Completed" : "Partially completed"}</Badge>}
           {session.modified && <Badge tone="warn">Modified · {session.modified.reason.replace("-", " ")}</Badge>}
         </div>
         {session.modified?.note && <p className="mt-2 text-sm text-muted">{session.modified.note}</p>}

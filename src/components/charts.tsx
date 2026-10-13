@@ -15,7 +15,7 @@ import {
   YAxis,
 } from "recharts";
 
-export const SERIES = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
+export const SERIES = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
 const compact = (v: number) => (Math.abs(v) >= 1000 ? `${Math.round(v / 100) / 10}k` : String(v));
 const axisProps = { tickLine: false, axisLine: false, tick: { fontSize: 11 } } as const;

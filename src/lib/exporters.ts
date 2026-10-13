@@ -61,6 +61,10 @@ export const CSV_DATASETS = {
           date: w.date,
           workout: w.workoutName,
           plan_week: w.planWeek,
+          type: w.kind,
+          location: w.location,
+          intensity: w.intensity ?? "",
+          completion: w.completion ?? "",
           duration_min: Math.round(w.durationSec / 60),
           completed_sets: w.exercises.reduce((n, e) => n + e.sets.filter((x) => x.completed).length, 0),
           modified_reason: w.modified?.reason ?? "",
@@ -78,6 +82,7 @@ export const CSV_DATASETS = {
           date: p.date,
           drill: p.drillName,
           source: p.source,
+          session_type: s.skillSessions.find((x) => x.id === p.sourceId)?.kind ?? (p.source === "workout" ? "workout" : "skills"),
           ...v,
           percentage: percentage(makes, attempts) ?? "",
         };
@@ -101,6 +106,23 @@ export const CSV_DATASETS = {
         notes: c.notes,
       })),
   },
+  "open-gym": {
+    label: "Open gym",
+    rows: (s: AppState): Row[] =>
+      (s.openGymSessions ?? []).map((o) => ({
+        date: o.date,
+        status: o.status,
+        replaced_with: o.replacedWith,
+        duration_min: o.durationMin,
+        intensity: o.intensity,
+        effort: o.effort,
+        format: o.format,
+        skills: o.skills.join("; "),
+        hard_running: o.hardRunning,
+        counts_for: o.countsFor ? `${o.countsFor.plannedWorkoutId}@${o.countsFor.originalDate}` : "",
+        notes: o.notes,
+      })),
+  },
   recovery: {
     label: "Recovery check-ins",
     rows: (s: AppState): Row[] =>
@@ -111,6 +133,7 @@ export const CSV_DATASETS = {
         energy: r.energy,
         soreness: r.soreness,
         readiness: r.readiness,
+        fatigue: r.fatigue,
         day_type: r.dayType,
         notes: r.notes,
       })),

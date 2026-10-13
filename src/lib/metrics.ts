@@ -364,6 +364,15 @@ export interface WeekBucket {
   weekStart: ISODate;
   label: string;
   workouts: number;
+  /** Gym strength workouts. */
+  strength: number;
+  /** Planned basketball workouts (center skills, speed & defense). */
+  courtWorkouts: number;
+  openGym: number;
+  openGymMin: number;
+  homeSessions: number;
+  /** Basketball-focused sessions (light open gym / light home shooting excluded). */
+  basketball: number;
   skillSessions: number;
   conditioning: number;
   sets: number;
@@ -379,13 +388,18 @@ export function weeklyBuckets(state: AppState, weeks: number, today: ISODate = t
   const buckets: WeekBucket[] = Array.from({ length: weeks }, (_, i) => {
     const ws = addDays(first, i * 7);
     const [, m, d] = ws.split("-");
-    return { weekStart: ws, label: `${Number(m)}/${Number(d)}`, workouts: 0, skillSessions: 0, conditioning: 0, sets: 0, volume: 0, conditioningMin: 0, intervals: 0 };
+    return { weekStart: ws, label: `${Number(m)}/${Number(d)}`, workouts: 0, strength: 0, courtWorkouts: 0, openGym: 0, openGymMin: 0, homeSessions: 0, basketball: 0, skillSessions: 0, conditioning: 0, sets: 0, volume: 0, conditioningMin: 0, intervals: 0 };
   });
   const find = (date: ISODate) => buckets.find((b) => date >= b.weekStart && date <= addDays(b.weekStart, 6));
   for (const s of completedSessions(state)) {
     const b = find(s.date);
     if (!b) continue;
     b.workouts += 1;
+    if (s.kind === "strength") b.strength += 1;
+    else if (s.kind === "basketball") b.courtWorkouts += 1;
+    else if (s.exercises.some((e) => isStrengthExercise(e, lib))) b.strength += 1;
+    else b.courtWorkouts += 1;
+    if (s.kind === "basketball" || (s.kind === "custom" && !s.exercises.some((e) => isStrengthExercise(e, lib)))) b.basketball += 1;
     b.sets += sum(s.exercises.map((e) => doneSets(e).length));
     for (const e of s.exercises) {
       if (!isStrengthExercise(e, lib)) continue;
@@ -394,7 +408,19 @@ export function weeklyBuckets(state: AppState, weeks: number, today: ISODate = t
   }
   for (const s of state.skillSessions) {
     const b = find(s.date);
-    if (b) b.skillSessions += 1;
+    if (!b) continue;
+    if (s.kind === "home-court") {
+      b.homeSessions += 1;
+      if (s.intensity !== "light") b.basketball += 1;
+    } else b.skillSessions += 1;
+  }
+  for (const o of state.openGymSessions ?? []) {
+    if (o.status !== "attended") continue;
+    const b = find(o.date);
+    if (!b) continue;
+    b.openGym += 1;
+    b.openGymMin += o.durationMin ?? 0;
+    if (o.intensity !== "light") b.basketball += 1;
   }
   for (const c of state.conditioningSessions) {
     const b = find(c.date);
@@ -430,13 +456,18 @@ export function latestRecovery(state: AppState): RecoveryEntry | null {
   return list.length ? list[list.length - 1] : null;
 }
 
+function avgOf(entries: RecoveryEntry[], key: "sleepHours" | "sleepQuality" | "energy" | "soreness" | "readiness" | "fatigue") {
+  return average(entries.map((e) => e[key]).filter((v): v is number => v !== null && v !== undefined));
+}
+
 export function recoveryAverages(entries: RecoveryEntry[]) {
   return {
-    sleepHours: average(entries.filter((e) => e.sleepHours !== null).map((e) => e.sleepHours!)),
-    sleepQuality: average(entries.map((e) => e.sleepQuality)),
-    energy: average(entries.map((e) => e.energy)),
-    soreness: average(entries.map((e) => e.soreness)),
-    readiness: average(entries.map((e) => e.readiness)),
+    sleepHours: avgOf(entries, "sleepHours"),
+    sleepQuality: avgOf(entries, "sleepQuality"),
+    energy: avgOf(entries, "energy"),
+    soreness: avgOf(entries, "soreness"),
+    readiness: avgOf(entries, "readiness"),
+    fatigue: avgOf(entries, "fatigue"),
   };
 }
 
@@ -450,23 +481,25 @@ export function recoveryAdvice(entry: RecoveryEntry | null): { level: AdviceLeve
   if (!entry) return null;
   const tips: string[] = [];
   let score = 0;
-  if (entry.readiness <= 2) score += 2;
-  if (entry.energy <= 2) score += 1;
-  if (entry.soreness >= 4) score += 2;
-  if (entry.sleepQuality <= 2) score += 1;
-  if (entry.sleepHours !== null && entry.sleepHours < 6) score += 1;
+  const has = (v: number | null | undefined): v is number => v !== null && v !== undefined;
+  if (has(entry.readiness) && entry.readiness <= 2) score += 2;
+  if (has(entry.energy) && entry.energy <= 2) score += 1;
+  if (has(entry.soreness) && entry.soreness >= 4) score += 2;
+  if (has(entry.fatigue) && entry.fatigue >= 4) score += 2;
+  if (has(entry.sleepQuality) && entry.sleepQuality <= 2) score += 1;
+  if (has(entry.sleepHours) && entry.sleepHours < 6) score += 1;
 
   if (score >= 4) {
     tips.push("Consider reducing session volume — drop one set from each exercise.");
     tips.push("Choose the low-impact conditioning option (bike or elliptical) or skip the finisher.");
     tips.push("Keep effort controlled; it's fine to make today an active-recovery day.");
-    if (entry.soreness >= 4) tips.push("If any soreness feels like pain rather than normal training soreness, check with a qualified professional before training it.");
+    if ((entry.soreness ?? 0) >= 4) tips.push("If any soreness feels like pain rather than normal training soreness, check with a qualified professional before training it.");
     return { level: "low", title: "Take it easier today", tips };
   }
   if (score >= 2) {
     tips.push("Train as planned but keep about three reps in reserve rather than two.");
     tips.push("Hold off on any progression (load, sprint intensity or extra rounds) today.");
-    if (entry.soreness >= 4) tips.push("Favor low-impact movement for conditioning.");
+    if ((entry.soreness ?? 0) >= 4) tips.push("Favor low-impact movement for conditioning.");
     return { level: "caution", title: "Train, but stay conservative", tips };
   }
   tips.push("Recovery looks good — train as planned with good technique.");
@@ -479,7 +512,7 @@ export interface ActivityItem {
   id: string;
   date: ISODate;
   sortKey: string;
-  kind: "workout" | "skills" | "conditioning" | "recovery";
+  kind: "workout" | "skills" | "home" | "open-gym" | "conditioning" | "recovery";
   title: string;
   detail: string;
   href: string;
@@ -501,14 +534,34 @@ export function recentActivity(state: AppState, limit = 8): ActivityItem[] {
   }
   for (const s of state.skillSessions) {
     const t = shotTotals(s.results.map((r) => r.values));
+    const isHome = s.kind === "home-court";
     items.push({
       id: s.id,
       date: s.date,
       sortKey: s.createdAt,
-      kind: "skills",
-      title: "Skills session",
-      detail: `${s.results.length} drill${s.results.length === 1 ? "" : "s"}${t.attempts ? ` · ${t.makes}/${t.attempts} shots` : ""}`,
-      href: "/skills",
+      kind: isHome ? "home" : "skills",
+      title: isHome ? "Home Court session" : "Skills session",
+      detail: [
+        `${s.results.length} drill${s.results.length === 1 ? "" : "s"}`,
+        t.attempts ? `${t.makes}/${t.attempts} shots` : null,
+        s.durationMin ? `${s.durationMin} min` : null,
+        s.intensity ?? null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      href: isHome ? "/home-court" : "/skills",
+    });
+  }
+  for (const o of state.openGymSessions ?? []) {
+    if (o.status !== "attended") continue;
+    items.push({
+      id: o.id,
+      date: o.date,
+      sortKey: o.createdAt,
+      kind: "open-gym",
+      title: "Open gym",
+      detail: [o.format?.replace("-", " "), o.durationMin ? `${o.durationMin} min` : null, o.intensity].filter(Boolean).join(" · "),
+      href: "/open-gym",
     });
   }
   for (const c of state.conditioningSessions) {
@@ -530,7 +583,16 @@ export function recentActivity(state: AppState, limit = 8): ActivityItem[] {
       sortKey: r.updatedAt,
       kind: "recovery",
       title: "Recovery check-in",
-      detail: `Readiness ${r.readiness}/5 · energy ${r.energy}/5 · soreness ${r.soreness}/5`,
+      detail:
+        [
+          r.readiness !== null ? `readiness ${r.readiness}/5` : null,
+          r.energy !== null ? `energy ${r.energy}/5` : null,
+          r.soreness !== null ? `soreness ${r.soreness}/5` : null,
+          r.fatigue != null ? `fatigue ${r.fatigue}/5` : null,
+          r.sleepHours !== null ? `${r.sleepHours} h sleep` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || (r.dayType === "rest" ? "Rest day" : "Check-in"),
       href: "/recovery",
     });
   }
@@ -546,6 +608,92 @@ export function hasAnyHistory(state: AppState) {
     state.workoutSessions.some((s) => s.status === "completed") ||
     state.skillSessions.length > 0 ||
     state.conditioningSessions.length > 0 ||
+    (state.openGymSessions ?? []).some((o) => o.status === "attended") ||
     state.recoveryEntries.length > 0
   );
+}
+
+/* ------------------------------- Weekly balance ------------------------------ */
+
+export interface WeekSummary {
+  weekStart: ISODate;
+  strengthDone: number;
+  basketballDone: number;
+  openGymAttended: number;
+  openGymPlanned: number;
+  homeSessions: number;
+  lightHomeSessions: number;
+  /** Minutes of basketball (open gym + skills workouts + home sessions). */
+  basketballMinutes: number;
+  hardSessions: number;
+  hardRunning: boolean;
+}
+
+/**
+ * How the week is actually going. Basketball-focused sessions are basketball
+ * workouts, attended open gym (not light), and Home Court sessions that
+ * weren't light. Light driveway shooting counts as practice only.
+ */
+export function weekSummary(state: AppState, date: ISODate = todayISO()): WeekSummary {
+  const ws = startOfWeek(date);
+  const we = addDays(ws, 6);
+  const inWeek = (d: ISODate) => d >= ws && d <= we;
+  const sessions = completedSessions(state).filter((s) => inWeek(s.date));
+  const lib = exerciseMap(state);
+  const og = (state.openGymSessions ?? []).filter((o) => inWeek(o.date));
+  const attended = og.filter((o) => o.status === "attended");
+  const homes = state.skillSessions.filter((s) => s.kind === "home-court" && inWeek(s.date));
+  const isStrength = (s: WorkoutSession) => s.kind === "strength" || (s.kind === "custom" && s.exercises.some((e) => isStrengthExercise(e, lib)));
+  const bbWorkouts = sessions.filter((s) => !isStrength(s));
+  return {
+    weekStart: ws,
+    strengthDone: sessions.filter(isStrength).length,
+    basketballDone: bbWorkouts.length + attended.filter((o) => o.intensity !== "light").length + homes.filter((h) => h.intensity !== "light").length,
+    openGymAttended: attended.length,
+    openGymPlanned: og.filter((o) => o.status === "planned").length,
+    homeSessions: homes.length,
+    lightHomeSessions: homes.filter((h) => h.intensity === "light").length,
+    basketballMinutes:
+      sum(attended.map((o) => o.durationMin ?? 0)) + sum(homes.map((h) => h.durationMin ?? 0)) + sum(bbWorkouts.map((s) => Math.round(s.durationSec / 60))),
+    hardSessions: hardSessionDates(state, ws, we).length,
+    hardRunning: attended.some((o) => o.hardRunning || (o.format === "full-court" && o.intensity === "hard")),
+  };
+}
+
+/** Dates of hard sessions in a range — used to spot accumulated fatigue. */
+export function hardSessionDates(state: AppState, from: ISODate, to: ISODate): ISODate[] {
+  const inR = (d: ISODate) => d >= from && d <= to;
+  const dates: ISODate[] = [];
+  for (const o of state.openGymSessions ?? []) {
+    if (o.status === "attended" && inR(o.date) && (o.intensity === "hard" || (o.effort ?? 0) >= 8)) dates.push(o.date);
+  }
+  for (const s of completedSessions(state)) if (inR(s.date) && s.intensity === "hard") dates.push(s.date);
+  for (const h of state.skillSessions) if (inR(h.date) && h.intensity === "hard") dates.push(h.date);
+  for (const c of state.conditioningSessions) if (inR(c.date) && !c.workoutSessionId && c.effort >= 8) dates.push(c.date);
+  return dates.sort();
+}
+
+/* ---------------------------- Center-skill totals ---------------------------- */
+
+export function centerSkillTotals(points: SkillPoint[], state: AppState) {
+  const by = (id: string) => points.filter((p) => p.drillId === id).map((p) => p.values);
+  const g = (vals: SkillPoint["values"][], k: SkillMetricKey) => sum(vals.map((v) => v[k] ?? 0));
+  const drop = by("drill-drop-steps");
+  const hooks = shotTotals(by("drill-jump-hooks"));
+  const mikan = shotTotals([...by("drill-mikan"), ...by("drill-reverse-mikan")]);
+  const outlet = by("drill-outlet");
+  const homeCompletions = state.skillSessions
+    .filter((s) => s.kind === "home-court" && points.some((p) => p.sourceId === s.id))
+    .flatMap((s) => s.results)
+    .filter((r) => r.completed).length;
+  return {
+    dropStepReps: g(drop, "leftReps") + g(drop, "rightReps") + g(drop, "reps"),
+    dropStepLeft: g(drop, "leftReps"),
+    dropStepRight: g(drop, "rightReps"),
+    hooks,
+    mikan,
+    reboundReps: g(outlet, "total") + g(by("drill-rebounding"), "reps"),
+    footworkReps: sum(["drill-pivots", "drill-def-footwork", "drill-closeouts"].map((id) => g(by(id), "reps"))),
+    drillsCompleted: homeCompletions,
+  };
 }

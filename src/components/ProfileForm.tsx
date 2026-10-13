@@ -7,15 +7,19 @@ import { Button, Field, Input, Segmented, Select, Textarea, useUnsavedWarning } 
 import { cn } from "@/lib/utils";
 
 export const PRIORITY_OPTIONS = [
+  "Consistency",
   "Strength",
   "Speed",
   "Conditioning",
-  "Athletic fitness",
-  "Post skills",
-  "Rebounding",
-  "Defense",
-  "Supporting healthy growth",
   "Shooting",
+  "Center footwork",
+  "Post skills",
+  "Defensive mobility",
+  "Rebounding",
+  "Athletic fitness",
+  "Recovery",
+  "Long-term progress",
+  "Supporting healthy growth",
   "Mobility",
 ];
 

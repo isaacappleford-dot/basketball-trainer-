@@ -2,9 +2,26 @@
 
 import { useState } from "react";
 import { Check, Clock, HeartPulse, Pencil, Play, Repeat, RotateCcw, Sparkles, TrendingDown, Undo2, X } from "lucide-react";
-import type { PlannedWorkout } from "@/lib/types";
+import type { DaySlotKind, PlannedWorkout } from "@/lib/types";
+
+const SLOT_DESCRIPTIONS: Record<DaySlotKind, string> = {
+  "open-gym": "Live basketball, defensive positioning, rebounding and game decisions. Go only if you want to.",
+  flex: "Open gym, a Home Court workout, recovery, or rest — pick what fits the week.",
+  recovery: "Easy shooting or mobility if you feel like it. No workout required.",
+  rest: "No mandatory workout.",
+};
 import { useAppState } from "@/lib/store";
-import { addWeekAdjustment, decideSuggestion, removeWeekAdjustment, resetPlanWorkouts, setWorkoutWeekday, undoDecision } from "@/lib/actions";
+import {
+  addWeekAdjustment,
+  decideSuggestion,
+  removeDaySlot,
+  removeWeekAdjustment,
+  resetPlanWorkouts,
+  setWorkoutWeekday,
+  undoDecision,
+  updateDaySlot,
+} from "@/lib/actions";
+import { LOCATION_LABELS, SLOT_LABELS } from "@/components/labels";
 import { progressionReport } from "@/lib/progression";
 import { weekInfo } from "@/lib/schedule";
 import { addDays, cn, formatDate, WEEK_ORDER, WEEKDAYS } from "@/lib/utils";
@@ -23,7 +40,8 @@ export default function PlanPage() {
   const report = progressionReport(state);
   const [editing, setEditing] = useState<PlannedWorkout | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-  const workouts = [...state.plan.workouts].sort((a, b) => WEEK_ORDER.indexOf(a.weekday) - WEEK_ORDER.indexOf(b.weekday));
+  const order = (d: number | null) => (d === null ? 99 : WEEK_ORDER.indexOf(d));
+  const workouts = [...state.plan.workouts].sort((a, b) => order(a.weekday) - order(b.weekday));
   const cw = info.calendarWeek;
   const adjustments = [...state.plan.weekAdjustments].sort((a, b) => a.calendarWeek - b.calendarWeek);
   const repeatNext = adjustments.find((a) => a.type === "repeat" && a.calendarWeek === cw + 1);
@@ -33,7 +51,7 @@ export default function PlanPage() {
   const schedule = WEEK_ORDER.map((d) => ({
     day: d,
     workout: state.plan.workouts.filter((w) => w.weekday === d),
-    rest: state.plan.restDays.find((r) => r.weekday === d),
+    slot: state.plan.daySlots.find((r) => r.weekday === d),
   }));
 
   return (
@@ -41,7 +59,7 @@ export default function PlanPage() {
       <PageHeader
         eyebrow={state.plan.name}
         title="Workout Plan"
-        subtitle="Four training days per week for 8 weeks. Edit any day, change the weekday it's scheduled on, and review progression suggestions."
+        subtitle="Two gym strength days and two basketball-focused sessions per week. Edit any workout, move it, or leave it unscheduled — and review progression suggestions."
         actions={
           <Button variant="ghost" onClick={() => setConfirmReset(true)}>
             <RotateCcw size={16} /> Restore default plan
@@ -224,23 +242,57 @@ export default function PlanPage() {
 
       {/* Weekly schedule */}
       <Card className="mt-4">
-        <CardTitle sub="Change the day for any workout — the calendar updates automatically.">Weekly schedule</CardTitle>
-        <ul className="grid gap-2 sm:grid-cols-7">
-          {schedule.map(({ day, workout, rest }) => (
-            <li key={day} className={cn("rounded-xl p-3 text-sm", workout.length ? "bg-accent-soft" : "bg-surface-2")}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-subtle">{WEEKDAYS[day].slice(0, 3)}</p>
-              {workout.length ? (
-                workout.map((w) => (
-                  <p key={w.id} className="mt-1 font-medium text-accent">
-                    Day {w.dayNumber}
-                  </p>
-                ))
-              ) : (
-                <p className="mt-1 text-muted">{rest?.weekday === 0 ? "Rest" : "Recovery"}</p>
+        <CardTitle sub="Defaults, not rules: two gym days, two basketball sessions, open gym when you want it. Change any day below — the calendar updates automatically.">
+          Weekly structure
+        </CardTitle>
+        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+          {schedule.map(({ day, workout, slot }) => (
+            <li key={day} className={cn("flex flex-col gap-1.5 rounded-xl p-3 text-sm", workout.length ? "bg-accent-soft" : "bg-surface-2")}>
+              <p className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle">
+                {WEEKDAYS[day].slice(0, 3)}
+                {state.profile.openGymDays.includes(day) && (
+                  <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-muted" title="Open gym available">
+                    OG
+                  </span>
+                )}
+              </p>
+              {workout.map((w) => (
+                <p key={w.id} className="font-medium text-accent">
+                  {w.label}
+                  <span className="block text-xs font-normal text-muted">{w.kind === "strength" ? "Gym strength" : "Basketball"}</span>
+                </p>
+              ))}
+              {!workout.length && (
+                <>
+                  <label className="sr-only" htmlFor={`slot-${day}`}>
+                    {WEEKDAYS[day]} plan
+                  </label>
+                  <Select
+                    id={`slot-${day}`}
+                    value={slot?.kind ?? ""}
+                    onChange={(e) => {
+                      const kind = e.target.value as DaySlotKind | "";
+                      if (!kind) removeDaySlot(day);
+                      else updateDaySlot({ weekday: day, kind, label: SLOT_LABELS[kind], description: SLOT_DESCRIPTIONS[kind] });
+                      toast(`${WEEKDAYS[day]} updated.`);
+                    }}
+                    className="h-9 px-2 text-xs"
+                  >
+                    <option value="">Unplanned</option>
+                    {(Object.keys(SLOT_LABELS) as DaySlotKind[]).map((k) => (
+                      <option key={k} value={k}>
+                        {SLOT_LABELS[k]}
+                      </option>
+                    ))}
+                  </Select>
+                </>
               )}
             </li>
           ))}
         </ul>
+        <p className="mt-3 text-xs text-subtle">
+          OG = open gym available (change in Open Gym or Settings). Missed sessions are never pushed onto rest days — skip or reschedule them from the calendar.
+        </p>
       </Card>
 
       {/* Training days */}
@@ -249,7 +301,9 @@ export default function PlanPage() {
           <Card key={w.id} as="article">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Day {w.dayNumber}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                  {w.label} · {w.kind === "strength" ? "Gym strength" : "Basketball"} · {LOCATION_LABELS[w.location]}
+                </p>
                 <h2 className="mt-1 font-display text-2xl font-bold uppercase leading-tight">{w.name}</h2>
                 <p className="mt-1 text-sm text-muted">{w.focus}</p>
               </div>
@@ -264,13 +318,15 @@ export default function PlanPage() {
               </label>
               <Select
                 id={`day-${w.id}`}
-                value={w.weekday}
+                value={w.weekday ?? ""}
                 onChange={(e) => {
-                  setWorkoutWeekday(w.id, Number(e.target.value));
-                  toast(`Day ${w.dayNumber} moved to ${WEEKDAYS[Number(e.target.value)]}.`);
+                  const v = e.target.value === "" ? null : Number(e.target.value);
+                  setWorkoutWeekday(w.id, v);
+                  toast(v === null ? `${w.label} is now optional.` : `${w.label} moved to ${WEEKDAYS[v]}.`);
                 }}
-                className="h-9 w-40 text-sm"
+                className="h-9 w-44 text-sm"
               >
+                <option value="">Not scheduled</option>
                 {WEEKDAYS.map((d, i) => (
                   <option key={d} value={i}>
                     {d}
@@ -331,7 +387,7 @@ export default function PlanPage() {
             )}
 
             <LinkButton href={`/workout?plan=${w.id}`} className="mt-4 w-full" size="lg">
-              <Play size={18} /> Start Day {w.dayNumber}
+              <Play size={18} /> Start {w.label}
             </LinkButton>
           </Card>
         ))}
@@ -342,7 +398,7 @@ export default function PlanPage() {
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
         title="Restore the default plan?"
-        message="All four training days return to their original exercises, warm-ups and weekdays. Your workout history is not affected."
+        message="All workouts and the weekly structure return to their defaults (Mon Day A, Tue optional open gym, Wed Day B, Thu your choice, Fri recovery, Sat center skills, Sun rest). Your history is not affected."
         confirmLabel="Restore defaults"
         onConfirm={() => {
           resetPlanWorkouts();

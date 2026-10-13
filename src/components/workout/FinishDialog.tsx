@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { ModificationReason, WorkoutSession } from "@/lib/types";
+import type { Intensity, ModificationReason, SessionLocation, WorkoutSession } from "@/lib/types";
 import { finishWorkout } from "@/lib/actions";
 import { formatDuration } from "@/lib/utils";
-import { Alert, Button, Checkbox, Field, Modal, NumberStepper, Select, Textarea, useToast } from "../ui";
+import { Alert, Button, Checkbox, Field, Modal, NumberStepper, Segmented, Select, Textarea, useToast } from "../ui";
+import { INTENSITY_OPTIONS, LOCATION_LABELS } from "../labels";
 
 export const MOD_REASONS: { value: ModificationReason; label: string }[] = [
   { value: "fatigue", label: "Fatigue" },
@@ -37,6 +38,8 @@ function FinishDialogInner({ onClose, session, elapsedSec, onFinished }: { onClo
   const [reason, setReason] = useState<ModificationReason>(session.modified?.reason ?? "fatigue");
   const [modNote, setModNote] = useState(session.modified?.note ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [intensity, setIntensity] = useState<Intensity | null>(session.intensity);
+  const [location, setLocation] = useState<SessionLocation>(session.location);
 
   const done = session.exercises.filter((e) => e.status !== "skipped" && e.sets.some((s) => s.completed));
   const skipped = session.exercises.filter((e) => e.status === "skipped");
@@ -49,10 +52,16 @@ function FinishDialogInner({ onClose, session, elapsedSec, onFinished }: { onClo
       setError("Enter a session duration between 1 and 600 minutes.");
       return;
     }
+    if (!intensity) {
+      setError("Choose how hard the session felt — it helps plan your recovery.");
+      return;
+    }
     const saved = finishWorkout({
       durationSec: Math.round(minutes * 60),
       notes: notes.trim(),
       modified: modified ? { reason, note: modNote.trim() } : null,
+      intensity,
+      location,
     });
     if (saved) {
       toast("Workout saved to your history.");
@@ -116,6 +125,19 @@ function FinishDialogInner({ onClose, session, elapsedSec, onFinished }: { onClo
       <div className="mt-5 space-y-4">
         <Field label="Session duration (minutes)" htmlFor="fin-min" error={error} hint="Adjust if you left the session open after training.">
           <NumberStepper id="fin-min" label="Session duration in minutes" value={minutes} onChange={setMinutes} min={0} max={600} step={5} suffix="min" />
+        </Field>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Session intensity</p>
+          <Segmented label="Session intensity" value={intensity} onChange={setIntensity} options={INTENSITY_OPTIONS} />
+        </div>
+        <Field label="Location" htmlFor="fin-loc">
+          <Select id="fin-loc" value={location} onChange={(e) => setLocation(e.target.value as SessionLocation)}>
+            {(Object.keys(LOCATION_LABELS) as SessionLocation[]).map((l) => (
+              <option key={l} value={l}>
+                {LOCATION_LABELS[l]}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label="Session notes" htmlFor="fin-notes">
           <Textarea id="fin-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="How did it go? Anything to remember next time?" />

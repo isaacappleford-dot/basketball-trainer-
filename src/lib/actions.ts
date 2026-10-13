@@ -6,6 +6,12 @@ import type {
   CalendarEvent,
   ConditioningDraft,
   ConditioningSession,
+  DaySlot,
+  HomeSessionDraft,
+  Intensity,
+  OccurrenceRef,
+  OpenGymSession,
+  SessionLocation,
   Exercise,
   ISODate,
   LoggedSet,
@@ -27,6 +33,7 @@ import { acceptedLoadTarget, plannedRounds } from "./progression";
 import { matchOccurrence, weekInfo } from "./schedule";
 import { convertWeight, nowISO, roundWeight, todayISO, uid } from "./utils";
 import type { Suggestion } from "./progression";
+import type { AdviceAction } from "./advice";
 
 /* ---------------------------------- Profile ---------------------------------- */
 
@@ -51,7 +58,18 @@ export function updatePlannedWorkout(workout: PlannedWorkout) {
   }));
 }
 
-export function setWorkoutWeekday(workoutId: string, weekday: number) {
+export function updateDaySlot(slot: DaySlot) {
+  setState((s) => ({
+    ...s,
+    plan: { ...s.plan, daySlots: [...s.plan.daySlots.filter((d) => d.weekday !== slot.weekday), slot].sort((a, b) => a.weekday - b.weekday) },
+  }));
+}
+
+export function removeDaySlot(weekday: number) {
+  setState((s) => ({ ...s, plan: { ...s.plan, daySlots: s.plan.daySlots.filter((d) => d.weekday !== weekday) } }));
+}
+
+export function setWorkoutWeekday(workoutId: string, weekday: number | null) {
   const w = getState().plan.workouts.find((x) => x.id === workoutId);
   if (w) updatePlannedWorkout({ ...w, weekday });
 }
@@ -75,7 +93,8 @@ export function removeWeekAdjustment(id: string) {
 
 /** Restores the four seeded workouts. History is unaffected (sessions keep snapshots). */
 export function resetPlanWorkouts() {
-  setState((s) => ({ ...s, plan: { ...s.plan, workouts: seedPlan().workouts, updatedAt: nowISO() } }));
+  const seed = seedPlan();
+  setState((s) => ({ ...s, plan: { ...s.plan, workouts: seed.workouts, daySlots: seed.daySlots, updatedAt: nowISO() } }));
 }
 
 /* --------------------------------- Exercises --------------------------------- */
@@ -124,7 +143,7 @@ const LOW_IMPACT_IDS = new Set(["brisk-walk", "lateral-steps", "bike-intervals"]
 export function buildSessionExercise(
   state: AppState,
   exerciseId: string,
-  target: { sets: number; repMin: number; repMax: number; repsLabel: string; restSec: number },
+  target: { sets: number; repMin: number; repMax: number; repsLabel: string; restSec: number; targetWeight?: number | null },
   opts: { isExtra?: boolean; substitutedFrom?: SessionExercise["substitutedFrom"]; unit: WorkoutSession["unit"] },
 ): SessionExercise {
   const ex = state.exercises.find((e) => e.id === exerciseId);
@@ -136,7 +155,8 @@ export function buildSessionExercise(
     const w = convertWeight(s.weight, s.unit, unit);
     return m === null || w > m ? w : m;
   }, null);
-  const targetWeight = accepted ?? (prevTop != null ? roundWeight(prevTop, unit) : null);
+  const planned = target.targetWeight != null ? convertWeight(target.targetWeight, state.profile.units, unit) : null;
+  const targetWeight = accepted ?? (planned != null ? roundWeight(planned, unit) : prevTop != null ? roundWeight(prevTop, unit) : null);
   const tracking = ex?.trackingType ?? "weighted";
   const drill = ex?.skillDrillId ? state.skillDrills.find((d) => d.id === ex.skillDrillId) : undefined;
   const sided = !!drill && (drill.metrics.includes("leftMakes") || drill.metrics.includes("leftReps"));
@@ -196,6 +216,10 @@ export interface StartOptions {
   scheduledDate?: ISODate | null;
   reducedVolume?: boolean;
   lowImpact?: boolean;
+  /** Shorter conditioning finisher (e.g. after hard open gym). */
+  shortConditioning?: boolean;
+  /** Skip the conditioning finisher entirely. */
+  skipConditioning?: boolean;
   modified?: { reason: ModificationReason; note: string } | null;
 }
 
@@ -229,12 +253,13 @@ export function startWorkout(opts: StartOptions): WorkoutSession {
     const preferred = opts.lowImpact
       ? planned.conditioning.find((c) => c.modality !== "court") ?? planned.conditioning[0]
       : planned.conditioning.find((c) => c.modality === state.profile.preferredConditioning) ?? planned.conditioning[0];
+    const base = plannedRounds(state, preferred.rounds, reduce);
     conditioning = {
-      enabled: true,
+      enabled: !opts.skipConditioning,
       optionId: preferred.id,
       modality: preferred.modality,
       customName: "",
-      plannedRounds: plannedRounds(state, preferred.rounds, reduce),
+      plannedRounds: opts.shortConditioning ? Math.max(3, Math.round(base / 2)) : base,
       completedRounds: 0,
       workSec: preferred.workSec,
       recoverySec: preferred.recoverySec,
@@ -243,7 +268,7 @@ export function startWorkout(opts: StartOptions): WorkoutSession {
       distance: null,
       distanceUnit: "mi",
       notes: "",
-      skippedReason: "",
+      skippedReason: opts.skipConditioning ? "Already did plenty of basketball this week" : "",
     };
   }
 
@@ -258,7 +283,7 @@ export function startWorkout(opts: StartOptions): WorkoutSession {
   const session: WorkoutSession = {
     id: uid("ws"),
     plannedWorkoutId: planned?.id ?? null,
-    workoutName: planned ? `Day ${planned.dayNumber} — ${planned.name}` : "Custom workout",
+    workoutName: planned ? `${planned.label} — ${planned.name}` : "Custom workout",
     planWeek: info.planWeek,
     scheduledDate,
     date,
@@ -278,6 +303,12 @@ export function startWorkout(opts: StartOptions): WorkoutSession {
     reducedVolume: reduce,
     modified: opts.modified ?? (opts.reducedVolume ? { reason: "fatigue", note: "Reduced volume" } : null),
     notes: "",
+    kind: planned?.kind ?? "custom",
+    location: planned?.location ?? "gym",
+    intensity: null,
+    completion: null,
+    pausedAt: null,
+    pausedSec: 0,
     createdAt: now,
     updatedAt: now,
   };
@@ -320,11 +351,26 @@ export function toggleActiveSet(exerciseRowId: string, setId: string) {
   });
 }
 
+/** Pause / resume the session clock (the rest timer keeps its own state). */
+export function pauseActive() {
+  updateActive((w) => (w.pausedAt ? w : { ...w, pausedAt: Date.now() }));
+}
+
+export function resumeActive() {
+  updateActive((w) => (w.pausedAt ? { ...w, pausedSec: w.pausedSec + Math.round((Date.now() - w.pausedAt) / 1000), pausedAt: null } : w));
+}
+
 export function discardActive() {
   setState((s) => ({ ...s, activeWorkout: null }));
 }
 
-export function finishWorkout(final: { durationSec: number; notes: string; modified: WorkoutSession["modified"] }): WorkoutSession | null {
+export function finishWorkout(final: {
+  durationSec: number;
+  notes: string;
+  modified: WorkoutSession["modified"];
+  intensity: Intensity | null;
+  location: SessionLocation;
+}): WorkoutSession | null {
   const state = getState();
   const active = state.activeWorkout;
   if (!active) return null;
@@ -367,6 +413,10 @@ export function finishWorkout(final: { durationSec: number; notes: string; modif
     durationSec: final.durationSec,
     notes: final.notes,
     modified: final.modified,
+    intensity: final.intensity,
+    location: final.location,
+    completion: exercises.length > 0 && exercises.every((e) => e.status !== "pending") ? "complete" : "partial",
+    pausedAt: null,
     conditioningSessionId: conditioningSession?.id ?? null,
     restTimer: { ...active.restTimer, endsAt: null, remainingSec: null },
     updatedAt: now,
@@ -385,6 +435,15 @@ export function deleteWorkoutSession(id: string) {
     ...s,
     workoutSessions: s.workoutSessions.filter((w) => w.id !== id),
     conditioningSessions: s.conditioningSessions.filter((c) => c.workoutSessionId !== id),
+  }));
+}
+
+/** Saves edits to a completed session (sets, date, duration, intensity, notes). */
+export function updateCompletedSession(session: WorkoutSession) {
+  setState((s) => ({
+    ...s,
+    workoutSessions: s.workoutSessions.map((w) => (w.id === session.id ? { ...session, updatedAt: nowISO() } : w)),
+    conditioningSessions: s.conditioningSessions.map((c) => (c.workoutSessionId === session.id ? { ...c, date: session.date } : c)),
   }));
 }
 
@@ -470,7 +529,7 @@ export function deleteCalendarEvent(id: string) {
 export function overrideOccurrence(
   plannedWorkoutId: string,
   originalDate: ISODate,
-  patch: Partial<Pick<CalendarEvent, "date" | "status" | "modifiedReason" | "notes">>,
+  patch: Partial<Pick<CalendarEvent, "date" | "status" | "modifiedReason" | "notes" | "swapWorkoutId" | "reduce">>,
 ) {
   const state = getState();
   const existing = state.calendarEvents.find(
@@ -501,6 +560,85 @@ export function clearOverride(plannedWorkoutId: string, originalDate: ISODate) {
       (e) => !(e.type === "workout" && e.plannedWorkoutId === plannedWorkoutId && e.originalDate === originalDate),
     ),
   }));
+}
+
+/* ---------------------------------- Open gym --------------------------------- */
+
+export function saveOpenGym(session: OpenGymSession) {
+  setState((s) => {
+    const exists = s.openGymSessions.some((x) => x.id === session.id);
+    const next = { ...session, updatedAt: nowISO() };
+    return { ...s, openGymSessions: exists ? s.openGymSessions.map((x) => (x.id === session.id ? next : x)) : [...s.openGymSessions, next] };
+  });
+}
+
+export function deleteOpenGym(id: string) {
+  setState((s) => ({ ...s, openGymSessions: s.openGymSessions.filter((x) => x.id !== id) }));
+}
+
+export function setOpenGymDays(days: number[]) {
+  updateProfile({ openGymDays: [...new Set(days)].sort() });
+}
+
+/* --------------------------------- Home Court -------------------------------- */
+
+export function startHomeSession(draft: HomeSessionDraft) {
+  setState((s) => (s.activeHomeSession ? s : { ...s, activeHomeSession: draft }));
+}
+
+export function updateHome(fn: (d: HomeSessionDraft) => HomeSessionDraft) {
+  setState((s) => (s.activeHomeSession ? { ...s, activeHomeSession: fn(s.activeHomeSession) } : s));
+}
+
+export function pauseHome() {
+  updateHome((d) => (d.pausedAt ? d : { ...d, pausedAt: Date.now() }));
+}
+
+export function resumeHome() {
+  updateHome((d) => (d.pausedAt ? { ...d, pausedSec: d.pausedSec + Math.round((Date.now() - d.pausedAt) / 1000), pausedAt: null } : d));
+}
+
+export function discardHome() {
+  setState((s) => ({ ...s, activeHomeSession: null }));
+}
+
+/** Saves the Home Court draft as a skills session (feeds shooting %, skill totals). */
+export function finishHome(final: { durationMin: number; intensity: Intensity; notes: string; countsFor: OccurrenceRef | null; date: ISODate }): SkillSession | null {
+  const draft = getState().activeHomeSession;
+  if (!draft) return null;
+  const now = nowISO();
+  const session: SkillSession = {
+    id: draft.id,
+    date: final.date,
+    kind: "home-court",
+    location: "home",
+    durationMin: final.durationMin,
+    intensity: final.intensity,
+    countsFor: final.countsFor,
+    gameNotes: "",
+    notes: final.notes,
+    results: draft.items
+      // Only real work: done, or with a logged result beyond an untouched attempt count.
+      .filter((i) => i.completed || Object.keys(i.values).some((k) => !/attempts|total/i.test(k)) || i.notes.trim())
+      .map((i) => ({ id: i.id, drillId: i.drillId, drillName: i.drillName, values: i.values, completed: i.completed, notes: i.notes.trim() })),
+    createdAt: now,
+    updatedAt: now,
+  };
+  setState((s) => ({ ...s, activeHomeSession: null, skillSessions: [...s.skillSessions, session] }));
+  return session;
+}
+
+/* ---------------------------------- Advice ----------------------------------- */
+
+export function dismissAdvice(id: string) {
+  setState((s) => ({ ...s, dismissedAdvice: [...s.dismissedAdvice.filter((x) => x !== id), id] }));
+}
+
+/** Applies a suggestion the athlete chose. Nothing here runs automatically. */
+export function applyAdvice(a: AdviceAction) {
+  if (a.kind === "reduce") overrideOccurrence(a.plannedId, a.originalDate, { reduce: true, status: "modified", modifiedReason: "fatigue" });
+  else if (a.kind === "move") overrideOccurrence(a.plannedId, a.originalDate, { date: a.date });
+  else if (a.kind === "skip") overrideOccurrence(a.plannedId, a.originalDate, { status: "skipped", notes: a.note });
 }
 
 /* -------------------------------- Progression -------------------------------- */

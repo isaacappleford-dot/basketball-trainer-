@@ -3,7 +3,7 @@
  * and `validateBackup`, so swapping localStorage for a database later means
  * replacing this file (and making the store's writes async).
  */
-import type { AppState } from "./types";
+import type { AppState, PlannedWorkout, TrainingPlan, WorkoutSession } from "./types";
 import { createInitialState, SCHEMA_VERSION } from "./seed";
 
 export const STORAGE_KEY = "center-performance:v1";
@@ -27,7 +27,17 @@ export function loadState(): LoadResult {
     const parsed = JSON.parse(raw);
     const check = validateBackup(parsed);
     if (!check.ok) throw new Error(check.errors.join("; "));
-    return { state: migrate(check.state), error: null };
+    const fromVersion = typeof parsed?.schemaVersion === "number" ? parsed.schemaVersion : 1;
+    if (fromVersion < SCHEMA_VERSION) {
+      // Keep a copy of the pre-upgrade data, then persist the migrated state.
+      try {
+        window.localStorage.setItem(`${STORAGE_KEY}:pre-v${SCHEMA_VERSION}`, raw);
+      } catch {
+        /* ignore — the migrated state is still saved below if possible */
+      }
+      saveState(check.state);
+    }
+    return { state: check.state, error: null };
   } catch (e) {
     try {
       window.localStorage.setItem(CORRUPT_KEY, raw);
@@ -53,18 +63,96 @@ export function saveState(state: AppState): string | null {
   }
 }
 
-/** Fill in fields added in later versions so older saves keep working. */
-function migrate(state: AppState): AppState {
+/** v1 defaults, used to tell untouched seed values from the athlete's own edits. */
+const V1_WEEKDAYS: Record<string, number> = { "pw-day1": 1, "pw-day2": 2, "pw-day3": 4, "pw-day4": 6 };
+const V1_ENVIRONMENT = "Full gym and basketball court";
+const V1_GOAL = "Become a more complete basketball center";
+
+/**
+ * Upgrades older saves (and imported backups) to the current schema. Logged
+ * history is never touched; only defaults the athlete hasn't edited change.
+ */
+export function migrate(state: AppState): AppState {
   const fresh = createInitialState();
+  const version = state.schemaVersion ?? 1;
+  const seedWorkouts = new Map(fresh.plan.workouts.map((w) => [w.id, w]));
+
+  // Plan workouts: add new metadata; move to the v2 week only if the weekday is still the v1 default.
+  const workouts = (state.plan?.workouts ?? fresh.plan.workouts).map((w) => {
+    const seed = seedWorkouts.get(w.id);
+    const legacy = w as Partial<PlannedWorkout>;
+    const untouchedDay = version < 2 && seed && V1_WEEKDAYS[w.id] === w.weekday;
+    return {
+      ...w,
+      label: legacy.label ?? seed?.label ?? `Day ${w.dayNumber}`,
+      kind: legacy.kind ?? seed?.kind ?? "strength",
+      emphasis: legacy.emphasis ?? seed?.emphasis ?? "upper",
+      location: legacy.location ?? seed?.location ?? "gym",
+      weekday: untouchedDay ? seed.weekday : w.weekday,
+      dayNumber: version < 2 && seed ? seed.dayNumber : w.dayNumber,
+      focus: version < 2 && seed && w.focus !== seed.focus && untouchedDay ? seed.focus : w.focus,
+    } as PlannedWorkout;
+  });
+
+  // Drills: v1 → v2 refreshes built-in definitions (names, instructions, home metadata); custom drills are kept.
+  // From v2 on, keep the athlete's edits to built-in drills and only add missing ones.
+  const existing = state.skillDrills ?? [];
+  const custom = existing.filter((d) => d.isCustom);
+  const skillDrills =
+    version < 2
+      ? [...fresh.skillDrills, ...custom.filter((c) => !fresh.skillDrills.some((f) => f.id === c.id))]
+      : [...existing, ...fresh.skillDrills.filter((f) => !existing.some((e) => e.id === f.id))];
+
+  // Exercises: add any new built-ins, keep favorites and custom exercises.
+  const exercises = [...(state.exercises ?? [])];
+  for (const e of fresh.exercises) if (!exercises.some((x) => x.id === e.id)) exercises.push(e);
+
+  const profile = { ...fresh.profile, ...state.profile };
+  if (version < 2) {
+    if (profile.trainingEnvironment === V1_ENVIRONMENT) profile.trainingEnvironment = fresh.profile.trainingEnvironment;
+    if (profile.mainGoal === V1_GOAL) profile.mainGoal = fresh.profile.mainGoal;
+    if (profile.position === "Center") profile.position = fresh.profile.position;
+  }
+
+  const legacyPlan = state.plan as TrainingPlan & { restDays?: unknown };
+  const { restDays: _legacyRest, ...plan } = legacyPlan ?? ({} as typeof legacyPlan);
+  void _legacyRest;
+
   return {
     ...fresh,
     ...state,
-    profile: { ...fresh.profile, ...state.profile },
-    plan: { ...fresh.plan, ...state.plan, weekAdjustments: state.plan.weekAdjustments ?? [] },
+    profile,
+    plan: {
+      ...fresh.plan,
+      ...plan,
+      workouts,
+      daySlots: plan.daySlots ?? fresh.plan.daySlots,
+      weekAdjustments: plan.weekAdjustments ?? [],
+    },
+    exercises,
+    skillDrills,
+    recoveryEntries: (state.recoveryEntries ?? []).map((r) => ({ ...r, fatigue: r.fatigue ?? null })),
+    workoutSessions: (state.workoutSessions ?? []).map(migrateSession),
+    activeWorkout: state.activeWorkout ? migrateSession(state.activeWorkout) : null,
     progressionDecisions: state.progressionDecisions ?? [],
     calendarEvents: state.calendarEvents ?? [],
-    skillDrills: state.skillDrills?.length ? state.skillDrills : fresh.skillDrills,
+    openGymSessions: state.openGymSessions ?? [],
+    activeHomeSession: state.activeHomeSession ?? null,
+    dismissedAdvice: state.dismissedAdvice ?? [],
     schemaVersion: SCHEMA_VERSION,
+  };
+}
+
+function migrateSession(s: WorkoutSession): WorkoutSession {
+  const kind = s.kind ?? (s.plannedWorkoutId === "pw-day1" || s.plannedWorkoutId === "pw-day3" ? "strength" : s.plannedWorkoutId ? "basketball" : "custom");
+  return {
+    ...s,
+    kind,
+    location: s.location ?? (s.plannedWorkoutId === "pw-day4" || s.plannedWorkoutId === "pw-day2" ? "court" : "gym"),
+    intensity: s.intensity ?? null,
+    completion: s.completion ?? (s.status === "completed" ? "complete" : null),
+    pausedAt: s.pausedAt ?? null,
+    pausedSec: s.pausedSec ?? 0,
   };
 }
 
@@ -124,15 +212,16 @@ export function validateBackup(input: unknown): Check {
   checkArray(data, "conditioningSessions", errors, (s) =>
     !isDate(s.date) ? "invalid date" : !isNum(s.totalDurationMin) ? "invalid duration" : null,
   );
-  checkArray(data, "recoveryEntries", errors, (r) => (!isDate(r.date) ? "invalid date" : !isNum(r.readiness) ? "invalid readiness" : null));
+  checkArray(data, "recoveryEntries", errors, (r) => (!isDate(r.date) ? "invalid date" : null));
   checkArray(data, "calendarEvents", errors, (c) => (!isDate(c.date) ? "invalid date" : null));
+  checkArray(data, "openGymSessions", errors, (o) => (!isDate(o.date) ? "invalid date" : !isStr(o.status) ? "missing status" : null));
 
   for (const key of ["workoutSessions", "skillSessions", "conditioningSessions", "recoveryEntries"]) {
     if (!Array.isArray(data[key])) errors.push(`Missing ${key}`);
   }
 
   if (errors.length) return { ok: false, errors: errors.slice(0, 8) };
-  return { ok: true, state: data as unknown as AppState };
+  return { ok: true, state: migrate(data as unknown as AppState) };
 }
 
 export function makeBackup(state: AppState) {

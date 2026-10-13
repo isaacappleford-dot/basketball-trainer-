@@ -3,12 +3,14 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, CheckCircle2, Dumbbell, HeartPulse, Play, Plus, Sparkles, TrendingUp } from "lucide-react";
+import { BedDouble, CalendarDays, CheckCircle2, Dumbbell, HeartPulse, House, Play, Plus, Sparkles, TrendingUp, Users } from "lucide-react";
 import type { ModificationReason, PlannedWorkout } from "@/lib/types";
 import { useAppState } from "@/lib/store";
 import { startWorkout } from "@/lib/actions";
-import { latestRecovery, recoveryAdvice } from "@/lib/metrics";
-import { matchOccurrence, nextOccurrence, occurrencesOn, weekInfo } from "@/lib/schedule";
+import { latestRecovery, recoveryAdvice, weekSummary } from "@/lib/metrics";
+import { daySlotFor, matchOccurrence, nextOccurrence, occurrencesOn, weekInfo } from "@/lib/schedule";
+import { shouldShortenConditioning } from "@/lib/advice";
+import { KIND_LABELS } from "@/components/labels";
 import { daysBetween, formatDate, formatLongDate, todayISO, WEEKDAYS } from "@/lib/utils";
 import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
 import { MOD_REASONS } from "@/components/workout/FinishDialog";
@@ -92,7 +94,8 @@ function StartScreen() {
     const w = state.plan.workouts.find((x) => x.id === planId) ?? null;
     if (!w) return null;
     const date = params.get("date") ?? today;
-    return { workout: w, date: date > today ? today : date, scheduledDate: params.get("scheduled") ?? undefined };
+    const d = date > today ? today : date;
+    return { workout: w, date: d, scheduledDate: params.get("scheduled") ?? matchOccurrence(state, w.id, d)?.originalDate ?? undefined };
   });
 
   const workouts = [...state.plan.workouts].sort((a, b) => a.dayNumber - b.dayNumber);
@@ -115,16 +118,21 @@ function StartScreen() {
             <Card key={o.key} className="border-accent/40">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Planned today{o.moved ? " · moved" : ""}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                    Planned today{o.moved ? " · moved" : ""}
+                    {o.swapped ? " · swapped" : ""}
+                  </p>
                   <h2 className="mt-1 font-display text-2xl font-bold uppercase">
-                    Day {o.workout.dayNumber} — {o.workout.name}
+                    {o.workout.label} — {o.workout.name}
                   </h2>
                   <p className="mt-1 text-sm text-muted">{o.workout.focus}</p>
                 </div>
-                {o.session ? (
-                  <Badge tone="good">
-                    <CheckCircle2 size={14} /> Completed
+                {o.session || o.fulfilledBy ? (
+                  <Badge tone={o.status === "completed" ? "good" : "neutral"}>
+                    <CheckCircle2 size={14} /> {o.fulfilledBy ? `${o.status === "completed" ? "Done" : "Replaced"} via ${o.fulfilledBy.label.toLowerCase()}` : "Completed"}
                   </Badge>
+                ) : o.status === "skipped" ? (
+                  <Badge>Skipped</Badge>
                 ) : (
                   <Button size="xl" onClick={() => setPending({ workout: o.workout, date: today, scheduledDate: o.originalDate })}>
                     <Play size={20} /> Start workout
@@ -142,11 +150,13 @@ function StartScreen() {
               ? `Your plan starts ${formatDate(state.profile.planStartDate, { weekday: "long", month: "short", day: "numeric" })}`
               : info.status === "finished"
                 ? "You've completed the 8-week plan window"
-                : state.plan.restDays.find((r) => r.weekday === new Date().getDay())?.label ?? "No workout planned today"}
+                : daySlotFor(state, today)?.label ?? "No workout planned today"}
           </h2>
+          {daySlotFor(state, today) && info.status === "active" && <p className="mt-1 text-sm text-muted">{daySlotFor(state, today)!.description}</p>}
+          {info.status === "active" && <SlotActions />}
           {next && (
-            <p className="mt-1 text-sm text-muted">
-              Next up: Day {next.workout.dayNumber} — {next.workout.name} on {formatDate(next.date, { weekday: "long", month: "short", day: "numeric" })}
+            <p className="mt-3 text-sm text-muted">
+              Next up: {next.workout.label} — {next.workout.name} on {formatDate(next.date, { weekday: "long", month: "short", day: "numeric" })}
             </p>
           )}
           <p className="mt-2 text-sm text-muted">You can still start any session below — it will count toward the matching workout this week.</p>
@@ -161,9 +171,13 @@ function StartScreen() {
             <li key={w.id}>
               <Card className="flex h-full flex-col">
                 <div className="flex items-start gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft font-display text-xl font-bold text-accent">{w.dayNumber}</span>
+                  <span className="flex h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft px-2 font-display text-sm font-bold uppercase text-accent">
+                    {w.label.replace("Day ", "")}
+                  </span>
                   <div className="min-w-0">
-                    <p className="text-xs text-subtle">{WEEKDAYS[w.weekday]}</p>
+                    <p className="text-xs text-subtle">
+                      {w.weekday === null ? "Optional · not scheduled" : WEEKDAYS[w.weekday]} · {KIND_LABELS[w.kind]}
+                    </p>
                     <h3 className="font-semibold leading-snug">{w.name}</h3>
                     <p className="mt-1 text-xs text-muted">
                       {w.exercises.length} exercises{w.conditioning.length ? " + conditioning" : ""}
@@ -205,6 +219,14 @@ function StartScreen() {
           <HeartPulse size={16} /> Log standalone conditioning
         </Link>
         <span className="text-subtle">·</span>
+        <Link href="/home-court" className="inline-flex items-center gap-1.5 text-muted hover:text-text">
+          <House size={16} /> Home Court session
+        </Link>
+        <span className="text-subtle">·</span>
+        <Link href="/open-gym" className="inline-flex items-center gap-1.5 text-muted hover:text-text">
+          <Users size={16} /> Log open gym
+        </Link>
+        <span className="text-subtle">·</span>
         <Link href="/skills" className="inline-flex items-center gap-1.5 text-muted hover:text-text">
           <Sparkles size={16} /> Log a skills session
         </Link>
@@ -233,8 +255,19 @@ function StartOptions({ pending, onClose, defaultReduce, deload }: { pending: Pe
   const state = useAppState();
   const today = todayISO();
   const w = pending.workout;
+  const override = w
+    ? state.calendarEvents.find(
+        (e) => e.type === "workout" && e.originalDate === pending.scheduledDate && (e.plannedWorkoutId === w.id || e.swapWorkoutId === w.id),
+      )
+    : undefined;
+  const plannedId = override?.plannedWorkoutId ?? w?.id ?? null;
+  const week = weekSummary(state, pending.date);
+  const lotsOfBasketball = !!w && w.kind === "basketball" && (week.basketballMinutes >= 180 || week.basketballDone >= state.profile.basketballPerWeek);
+  const hasConditioning = !!w && w.conditioning.length > 0;
   const [date, setDate] = useState(pending.date);
-  const [reduced, setReduced] = useState(defaultReduce);
+  const [reduced, setReduced] = useState(defaultReduce || !!override?.reduce || lotsOfBasketball);
+  const [shortCond, setShortCond] = useState(shouldShortenConditioning(state, pending.date));
+  const [skipCond, setSkipCond] = useState(false);
   const [lowImpact, setLowImpact] = useState(false);
   const [modReason, setModReason] = useState<ModificationReason | "">("");
   const [modNote, setModNote] = useState("");
@@ -250,6 +283,8 @@ function StartOptions({ pending, onClose, defaultReduce, deload }: { pending: Pe
       scheduledDate: date === pending.date ? pending.scheduledDate : undefined,
       reducedVolume: reduced,
       lowImpact,
+      shortConditioning: hasConditioning && shortCond,
+      skipConditioning: hasConditioning && skipCond,
       modified: modReason ? { reason: modReason, note: modNote.trim() } : reduced ? { reason: "fatigue", note: "Reduced volume" } : null,
     });
     onClose();
@@ -260,7 +295,7 @@ function StartOptions({ pending, onClose, defaultReduce, deload }: { pending: Pe
     <Modal
       open
       onClose={onClose}
-      title={w ? `Day ${w.dayNumber} — ${w.name}` : "Custom workout"}
+      title={w ? `${w.label} — ${w.name}` : "Custom workout"}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -286,8 +321,34 @@ function StartOptions({ pending, onClose, defaultReduce, deload }: { pending: Pe
           <Input id="start-date" type="date" max={today} value={date} onChange={(e) => setDate(e.target.value)} aria-invalid={!!error} />
         </Field>
         {deload && <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn">This is a deload week — sets are reduced by one automatically.</p>}
+        {override?.reduce && <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn">You chose a lighter version of this session from a scheduling suggestion. Untick below to do the full session.</p>}
+        {lotsOfBasketball && (
+          <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted">
+            You&apos;ve already logged {week.basketballMinutes} min of basketball this week, so the shorter version is pre-selected. Change it if you feel fresh.
+          </p>
+        )}
+        {w?.kind === "basketball" && plannedId && pending.scheduledDate && (
+          <p className="text-sm">
+            <Link href={`/home-court?for=${plannedId}@${pending.scheduledDate}`} className="inline-flex items-center gap-1.5 text-accent hover:underline">
+              <House size={15} /> Do a Home Court driveway session instead
+            </Link>
+          </p>
+        )}
         <div className="rounded-xl border border-line p-1">
           <Checkbox checked={reduced} onChange={setReduced} label="Reduced volume" description="One fewer set per exercise and fewer conditioning rounds. Recommended when tired or sore." />
+          {hasConditioning && (
+            <Checkbox
+              checked={shortCond}
+              onChange={setShortCond}
+              label="Shorter conditioning finisher"
+              description={
+                week.hardRunning ? "Pre-selected: open gym already gave you hard running this week." : "About half the usual rounds."
+              }
+            />
+          )}
+          {hasConditioning && (
+            <Checkbox checked={skipCond} onChange={setSkipCond} label="Skip the conditioning finisher" description="Skills only today. You can still turn it back on during the workout." />
+          )}
           {hasMovement && (
             <Checkbox
               checked={lowImpact}
@@ -314,5 +375,32 @@ function StartOptions({ pending, onClose, defaultReduce, deload }: { pending: Pe
         )}
       </div>
     </Modal>
+  );
+}
+
+/** Quick choices for non-workout days (open gym, flex, recovery). Nothing is required. */
+function SlotActions() {
+  const state = useAppState();
+  const today = todayISO();
+  const slot = daySlotFor(state, today);
+  const openGym = state.profile.openGymDays.includes(new Date().getDay());
+  if (!slot && !openGym) return null;
+  if (slot?.kind === "rest") return <p className="mt-2 text-sm text-muted">Enjoy the day off — nothing is scheduled.</p>;
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {openGym && slot?.kind !== "recovery" && (
+        <LinkButton href="/open-gym" variant="secondary" size="sm">
+          <Users size={15} /> Open gym
+        </LinkButton>
+      )}
+      {(slot?.kind === "flex" || slot?.kind === "recovery" || slot?.kind === "open-gym") && (
+        <LinkButton href={slot.kind === "recovery" ? "/home-court?template=light" : "/home-court"} variant="secondary" size="sm">
+          <House size={15} /> {slot.kind === "recovery" ? "Light shooting" : "Home Court workout"}
+        </LinkButton>
+      )}
+      <LinkButton href="/recovery" variant="ghost" size="sm">
+        <BedDouble size={15} /> Recovery / rest
+      </LinkButton>
+    </div>
   );
 }

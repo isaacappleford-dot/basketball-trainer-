@@ -2,12 +2,13 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BarChart3, Dumbbell, HeartPulse, ListChecks, Target, Trash2, Trophy } from "lucide-react";
+import { BarChart3, Dumbbell, HeartPulse, House, ListChecks, Pencil, Target, Trash2, Trophy, Users } from "lucide-react";
 import type { ISODate } from "@/lib/types";
 import { useAppState } from "@/lib/store";
 import { deleteWorkoutSession } from "@/lib/actions";
 import {
   allSkillPoints,
+  centerSkillTotals,
   completedSessions,
   exerciseHistory,
   exerciseMap,
@@ -23,6 +24,7 @@ import {
 import { daysBetween, formatDate, formatPct, startOfWeek, sum, todayISO } from "@/lib/utils";
 import { SimpleBarChart, SimpleLineChart } from "@/components/charts";
 import { SessionDetail } from "@/components/SessionDetail";
+import { SessionEditor } from "@/components/SessionEditor";
 import { Badge, Button, Card, CardTitle, ConfirmDialog, EmptyState, LinkButton, LoadingScreen, Modal, PageHeader, Segmented, Select, Stat, useToast } from "@/components/ui";
 
 export default function ProgressPage() {
@@ -80,6 +82,10 @@ function Progress() {
   })();
 
   const conditioning = state.conditioningSessions.filter((c) => inRange(c.date, range));
+  const openGym = state.openGymSessions.filter((o) => o.status === "attended" && inRange(o.date, range));
+  const center = centerSkillTotals(skillPoints, state);
+  const [editing, setEditing] = useState<string | null>(null);
+  const editSession = editing ? state.workoutSessions.find((w) => w.id === editing) : null;
   const totalSets = sum(sessions.map((s) => sessionTotals(s).totalSets));
   const openSession = sessionId ? state.workoutSessions.find((s) => s.id === sessionId && s.status === "completed") : null;
 
@@ -88,7 +94,11 @@ function Progress() {
     if (params.get("session")) router.replace("/progress");
   };
 
-  const nothing = completedSessions(state).length === 0 && state.skillSessions.length === 0 && state.conditioningSessions.length === 0;
+  const nothing =
+    completedSessions(state).length === 0 &&
+    state.skillSessions.length === 0 &&
+    state.conditioningSessions.length === 0 &&
+    !state.openGymSessions.some((o) => o.status === "attended");
 
   return (
     <div>
@@ -204,8 +214,21 @@ function Progress() {
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardTitle sub={`Workouts per week vs your goal of ${state.profile.daysPerWeek}`}>Consistency</CardTitle>
-              <SimpleBarChart data={buckets} xKey="label" series={[{ key: "workouts", name: "Workouts" }]} goal={state.profile.daysPerWeek} label="Workouts per week" />
+              <CardTitle sub={`Strength + basketball-focused sessions per week vs your goal of ${state.profile.strengthPerWeek + state.profile.basketballPerWeek}`}>
+                Consistency
+              </CardTitle>
+              <SimpleBarChart
+                data={buckets}
+                xKey="label"
+                stacked
+                series={[
+                  { key: "strength", name: "Gym strength" },
+                  { key: "basketball", name: "Basketball-focused" },
+                ]}
+                goal={state.profile.strengthPerWeek + state.profile.basketballPerWeek}
+                label="Strength and basketball sessions per week"
+              />
+              <p className="mt-2 text-xs text-subtle">Light open gym and light driveway shooting count as practice, not as basketball-focused sessions.</p>
             </Card>
             <Card>
               <CardTitle sub="Completed sets per week, all exercises">Completed sets by week</CardTitle>
@@ -227,6 +250,60 @@ function Progress() {
                   .map((b) => `${b.label}: ${b.intervals}`)
                   .join(" · ") || "none in this range"}
               </p>
+            </Card>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardTitle icon={<Users size={16} />} sub="Open gym sessions attended per week">
+                Open gym
+              </CardTitle>
+              {openGym.length === 0 ? (
+                <p className="text-sm text-muted">No open gym attended in this range.</p>
+              ) : (
+                <>
+                  <SimpleBarChart data={buckets} xKey="label" series={[{ key: "openGym", name: "Open gym", color: "var(--chart-3)" }]} label="Open gym sessions per week" />
+                  <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
+                    {(["light", "moderate", "hard"] as const).map((k) => (
+                      <div key={k} className="rounded-xl bg-surface-2 p-2">
+                        <dt className="text-[11px] capitalize text-subtle">{k}</dt>
+                        <dd className="font-semibold tabular">{openGym.filter((o) => o.intensity === k).length}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="mt-2 text-xs text-subtle">
+                    {sum(openGym.map((o) => o.durationMin ?? 0))} min total · {openGym.filter((o) => o.format === "full-court").length} full-court ·{" "}
+                    {openGym.filter((o) => o.format === "half-court").length} half-court · {openGym.filter((o) => o.format === "drills").length} drills
+                  </p>
+                </>
+              )}
+            </Card>
+            <Card>
+              <CardTitle icon={<House size={16} />} sub="From center-skills workouts and Home Court sessions">
+                Center-skill practice totals
+              </CardTitle>
+              {skillPoints.length === 0 ? (
+                <p className="text-sm text-muted">No skill work logged in this range.</p>
+              ) : (
+                <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {(
+                    [
+                      ["Drop-step reps", `${center.dropStepReps}`, `L ${center.dropStepLeft} · R ${center.dropStepRight}`],
+                      ["Jump hooks", `${center.hooks.makes}/${center.hooks.attempts}`, `L ${formatPct(center.hooks.left.pct)} · R ${formatPct(center.hooks.right.pct)}`],
+                      ["Mikan / reverse", `${center.mikan.makes}/${center.mikan.attempts}`, formatPct(center.mikan.pct)],
+                      ["Rebounding reps", `${center.reboundReps}`, ""],
+                      ["Footwork reps", `${center.footworkReps}`, "pivots, slides, closeouts"],
+                      ["Home drills done", `${center.drillsCompleted}`, "completion checkboxes"],
+                    ] as const
+                  ).map(([k, v, sub]) => (
+                    <div key={k} className="rounded-xl bg-surface-2 p-2.5">
+                      <dt className="text-[11px] text-subtle">{k}</dt>
+                      <dd className="font-display text-xl font-bold tabular">{v}</dd>
+                      {sub && <dd className="text-[11px] text-muted">{sub}</dd>}
+                    </div>
+                  ))}
+                </dl>
+              )}
             </Card>
           </div>
 
@@ -333,6 +410,15 @@ function Progress() {
               <Button variant="danger" onClick={() => setConfirmDelete(openSession.id)}>
                 <Trash2 size={16} /> Delete session
               </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setEditing(openSession.id);
+                  closeSession();
+                }}
+              >
+                <Pencil size={16} /> Edit
+              </Button>
               <Button variant="secondary" onClick={closeSession}>
                 Close
               </Button>
@@ -342,6 +428,7 @@ function Progress() {
       >
         {openSession && <SessionDetail session={openSession} />}
       </Modal>
+      {editSession && <SessionEditor session={editSession} onClose={() => setEditing(null)} />}
       <ConfirmDialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
