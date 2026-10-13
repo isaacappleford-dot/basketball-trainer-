@@ -358,7 +358,10 @@ export default function PlanPage() {
                 <li key={e.id} className="flex items-center gap-3 py-2.5">
                   <span className="w-5 shrink-0 text-xs text-subtle tabular">{i + 1}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{lib(e.exerciseId)?.name ?? e.exerciseId}</span>
+                    <span className="block truncate text-sm font-medium">
+                      {lib(e.exerciseId)?.name ?? e.exerciseId}
+                      {e.optional && <span className="ml-1.5 text-xs font-normal text-subtle">(optional)</span>}
+                    </span>
                     {e.notes && <span className="block truncate text-xs text-subtle">{e.notes}</span>}
                   </span>
                   <span className="shrink-0 text-right text-sm tabular">

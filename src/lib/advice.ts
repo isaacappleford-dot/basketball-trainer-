@@ -118,12 +118,17 @@ export function weeklyAdvice(state: AppState, today: ISODate = todayISO()): Advi
 
   /* 4. Lots of basketball already → shorter center-skills session. */
   const skillsLeft = currentWeekOccurrences(state, today).find((o) => o.status === "planned" && o.date >= today && o.workout.emphasis === "skills" && !o.override?.reduce);
-  if (skillsLeft && (summary.basketballMinutes >= 180 || summary.basketballDone >= state.profile.basketballPerWeek)) {
+  const hardOpenGym = (state.openGymSessions ?? []).some(
+    (g) => g.status === "attended" && g.date >= weekStart && g.date <= today && (g.intensity === "hard" || g.hardRunning),
+  );
+  if (skillsLeft && (hardOpenGym || summary.basketballMinutes >= 180 || summary.basketballDone >= state.profile.basketballPerWeek)) {
     out.push({
       id: `bb-volume:${skillsLeft.key}`,
       level: "info",
-      title: `Consider a shorter ${skillsLeft.workout.label} session`,
-      reason: `You've logged ${summary.basketballMinutes} min of basketball across ${summary.basketballDone} session${summary.basketballDone === 1 ? "" : "s"} this week. A shorter session keeps the skill work without piling on volume.`,
+      title: `Adjust ${dayName(skillsLeft.date)}'s ${skillsLeft.workout.label} workload?`,
+      reason: hardOpenGym
+        ? `You played hard at open gym this week. Consider the shorter ${skillsLeft.workout.label} session (one fewer set per drill, shorter conditioning) — or keep it as planned if you feel recovered.`
+        : `You've logged ${summary.basketballMinutes} min of basketball across ${summary.basketballDone} session${summary.basketballDone === 1 ? "" : "s"} this week. A shorter session keeps the skill work without piling on volume.`,
       actions: [{ kind: "reduce", label: "Use the short version", plannedId: skillsLeft.plannedId, originalDate: skillsLeft.originalDate }],
     });
   }

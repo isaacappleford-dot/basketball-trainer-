@@ -10,7 +10,7 @@ import { Alert, Button, ConfirmDialog, Field, IconButton, Input, Modal, Segmente
 
 type NumKey = "weight" | "reps" | "makes" | "attempts" | "durationSec" | "distance" | "effort";
 
-function fieldsFor(t: SessionExercise["trackingType"]): { key: NumKey; label: string }[] {
+function fieldsFor(t: SessionExercise["trackingType"]): { key: NumKey; label: string; scale?: number }[] {
   const effort = { key: "effort" as const, label: "Effort" };
   switch (t) {
     case "weighted":
@@ -19,6 +19,8 @@ function fieldsFor(t: SessionExercise["trackingType"]): { key: NumKey; label: st
       return [{ key: "makes", label: "Makes" }, { key: "attempts", label: "Att." }];
     case "timed":
       return [{ key: "durationSec", label: "Sec" }, effort];
+    case "cardio":
+      return [{ key: "durationSec", label: "Min", scale: 60 }, { key: "distance", label: "Dist." }];
     case "distance":
       return [{ key: "reps", label: "Reps" }, { key: "distance", label: "Dist." }];
     default:
@@ -147,8 +149,12 @@ export function SessionEditor({ session, onClose }: { session: WorkoutSession; o
                                 type="number"
                                 inputMode="decimal"
                                 aria-label={`${e.name} set ${i + 1} ${f.label}`}
-                                value={x[f.key] ?? ""}
-                                onChange={(ev) => setSet(e.id, x.id, { [f.key]: ev.target.value === "" ? null : Number(ev.target.value) })}
+                                value={x[f.key] == null ? "" : f.scale ? Math.round(((x[f.key] as number) / f.scale) * 10) / 10 : (x[f.key] as number)}
+                                onChange={(ev) =>
+                                  setSet(e.id, x.id, {
+                                    [f.key]: ev.target.value === "" ? null : f.scale ? Math.round(Number(ev.target.value) * f.scale) : Number(ev.target.value),
+                                  })
+                                }
                                 className="mt-0.5 h-10 w-full rounded-lg border border-line-strong bg-surface-2 px-2 text-sm text-text"
                               />
                             </label>

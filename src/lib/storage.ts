@@ -68,6 +68,16 @@ const V1_WEEKDAYS: Record<string, number> = { "pw-day1": 1, "pw-day2": 2, "pw-da
 /** v2 default weekdays that changed in v3 (Day B moved Wednesday → Friday). */
 const V2_WEEKDAYS: Record<string, number> = { "pw-day3": 3 };
 const V2_FRIDAY_LABEL = "Recovery or light shooting";
+/** v3 default names, used to rename only untouched entries in v4. */
+const V3_NAMES: Record<string, string> = { "pw-day1": "Lower-Body Strength & Power", "pw-day3": "Upper-Body Strength & Core" };
+const V3_EXERCISE_NAMES: Record<string, string> = {
+  "leg-press": "Leg press",
+  "seated-leg-curl": "Seated leg curl",
+  "calf-raise": "Calf raises",
+  "chest-press": "Chest press",
+  "seated-row": "Seated row",
+  "lat-pulldown": "Lat pulldown",
+};
 const V1_ENVIRONMENT = "Full gym and basketball court";
 const V1_GOAL = "Become a more complete basketball center";
 
@@ -98,6 +108,24 @@ export function migrate(state: AppState): AppState {
     } as PlannedWorkout;
   });
 
+  // v3 → v4: Monday/Friday use the athlete's exact gym templates. Old exercises stay
+  // in the library (and in history) but are not added back to these templates.
+  if (version < 4) {
+    for (let i = 0; i < workouts.length; i++) {
+      const w = workouts[i];
+      const seed = seedWorkouts.get(w.id);
+      if (!seed || (w.id !== "pw-day1" && w.id !== "pw-day3")) continue;
+      workouts[i] = {
+        ...w,
+        name: V3_NAMES[w.id] === w.name ? seed.name : w.name,
+        focus: seed.focus,
+        warmup: seed.warmup,
+        exercises: seed.exercises,
+        guidance: seed.guidance,
+      };
+    }
+  }
+
   // Drills: v1 → v2 refreshes built-in definitions (names, instructions, home metadata); custom drills are kept.
   // From v2 on, keep the athlete's edits to built-in drills and only add missing ones.
   const existing = state.skillDrills ?? [];
@@ -108,7 +136,13 @@ export function migrate(state: AppState): AppState {
       : [...existing, ...fresh.skillDrills.filter((f) => !existing.some((e) => e.id === f.id))];
 
   // Exercises: add any new built-ins, keep favorites and custom exercises.
-  const exercises = [...(state.exercises ?? [])];
+  // v4 renames built-ins to match the gym's machine names (only if still the old default name).
+  const freshEx = new Map(fresh.exercises.map((e) => [e.id, e]));
+  const exercises = (state.exercises ?? []).map((e) => {
+    const f = freshEx.get(e.id);
+    if (version >= 4 || e.isCustom || !f || V3_EXERCISE_NAMES[e.id] !== e.name) return e;
+    return { ...e, name: f.name, setsReps: f.setsReps, rest: f.rest };
+  });
   for (const e of fresh.exercises) if (!exercises.some((x) => x.id === e.id)) exercises.push(e);
 
   const profile = { ...fresh.profile, ...state.profile };

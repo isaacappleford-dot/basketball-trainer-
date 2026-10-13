@@ -115,6 +115,8 @@ src/
     exporters.ts            # CSV export
 ```
 
+**Schema v4 migration.** Monday (Day A) and Friday (Day B) now use your gym templates exactly. Monday: Outer Thigh Machine 3×12 · Seated Leg Curl 3×8–12 · Leg Press 3×7–12 · Leg Extensions 3×8–12 · Calf Raises 3×10–12 · Inner Thigh Machine 3×15–20 · Ab Crunch Machine 3×10–20 · Treadmill Run (optional, minutes). Friday: Cable Row 3×7–12 · Chest Press Machine 3×6–10 · Preacher Curl 3×7–10 · Lateral Raise Machine 3×10–12 · Assisted Tricep Dip 2×7–12 · Lat Pulldown Machine 3×7–10. Default rest is 2 minutes. Target reps pre-fill each set, and the last weight you used carries forward. Machines that already existed keep their IDs (renamed), so earlier history continues. Old exercises stay in the library and history but aren't added back to these templates. Each exercise has an optional "Ref. weight" field in the plan editor for reference values you want to enter yourself.
+
 **Schema v3 migration.** Saved data from v2 moves Day B from Wednesday to Friday (only if you hadn't changed its day), removes the old default Friday recovery slot, and marks Wednesday unavailable. History, open gym, Home Court sessions and calendar records are untouched. A copy of the pre-upgrade data is kept under `center-performance:v1:pre-v3`.
 
 **Schema v2 migration.** Saved data and imported backups from the first version are upgraded automatically. All history is kept. Default workouts move to the new week only if you hadn't changed their weekday, and a copy of the pre-upgrade data is kept in localStorage under `center-performance:v1:pre-v2`.

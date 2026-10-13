@@ -76,6 +76,7 @@ export type ExerciseCategory =
  * - reps-side: reps, with a side (left/right)
  * - shooting: makes / attempts, with a hand
  * - distance: reps over a distance (sprints, accelerations)
+ * - cardio: duration in minutes (+ optional distance), not a weight-training set
  */
 export type TrackingType =
   | "weighted"
@@ -83,7 +84,8 @@ export type TrackingType =
   | "timed"
   | "reps-side"
   | "shooting"
-  | "distance";
+  | "distance"
+  | "cardio";
 
 export interface Exercise {
   id: ID;
@@ -126,6 +128,8 @@ export interface PlannedExercise {
   role: "main" | "accessory" | "skill" | "movement";
   /** Optional working weight set by you in the plan editor (profile units). */
   targetWeight?: number | null;
+  /** Optional exercise (e.g. treadmill finisher): skipping it doesn't make the workout partial. */
+  optional?: boolean;
   notes: string;
 }
 
@@ -240,6 +244,7 @@ export interface SessionExercise {
   restSec: number;
   targetWeight: number | null;
   status: "pending" | "done" | "skipped";
+  optional?: boolean;
   substitutedFrom: { exerciseId: ID; name: string } | null;
   isExtra: boolean;
   sets: LoggedSet[];

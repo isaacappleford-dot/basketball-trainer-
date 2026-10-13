@@ -66,6 +66,7 @@ function Progress() {
   const hist = exerciseId ? exerciseHistory(state, exerciseId, unit).filter((h) => inRange(h.date, range)) : [];
   const ex = lib.get(exerciseId);
   const weighted = hist.some((h) => h.topWeight !== null);
+  const cardio = !weighted && hist.some((h) => h.minutes > 0) && hist.every((h) => h.totalReps === 0);
   const histData = hist.map((h) => ({ ...h, label: formatDate(h.date), topWeight: h.topWeight === null ? null : Math.round(h.topWeight * 10) / 10 }));
 
   const prs = personalRecords(state).filter((p) => inRange(p.date, range));
@@ -163,6 +164,12 @@ function Progress() {
                         />
                       </div>
                     ) : null}
+                    {cardio ? (
+                      <div>
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-subtle">Duration (minutes)</p>
+                        <SimpleBarChart data={histData} xKey="label" series={[{ key: "minutes", name: "Minutes", color: "var(--chart-3)" }]} label={`Duration for ${ex?.name}`} valueSuffix=" min" />
+                      </div>
+                    ) : (
                     <div>
                       <p className="mb-2 text-xs font-medium uppercase tracking-wider text-subtle">{weighted ? "Reps at top weight" : "Best set (reps)"}</p>
                       <SimpleLineChart
@@ -174,6 +181,7 @@ function Progress() {
                         domain={[0, "auto"]}
                       />
                     </div>
+                    )}
                   </div>
                 )}
                 {hist.length > 0 && (
@@ -184,7 +192,7 @@ function Progress() {
                           <th className="py-2 font-medium">Date</th>
                           <th className="py-2 font-medium">Sets</th>
                           <th className="py-2 font-medium">{weighted ? "Top set" : "Best set"}</th>
-                          <th className="py-2 font-medium">Total reps</th>
+                          <th className="py-2 font-medium">{cardio ? "Time" : "Total reps"}</th>
                           {weighted && <th className="py-2 font-medium">Volume</th>}
                           <th className="py-2 font-medium">Avg effort</th>
                         </tr>
@@ -199,7 +207,7 @@ function Progress() {
                             </td>
                             <td className="tabular">{h.sets}</td>
                             <td className="tabular">{weighted ? `${h.topWeight !== null ? Math.round(h.topWeight * 10) / 10 : "—"} × ${h.repsAtTop ?? "—"}` : h.bestReps ?? "—"}</td>
-                            <td className="tabular">{h.totalReps}</td>
+                            <td className="tabular">{cardio ? `${h.minutes} min` : h.totalReps}</td>
                             {weighted && <td className="tabular">{Math.round(h.volume).toLocaleString()}</td>}
                             <td className="tabular">{h.avgEffort !== null ? h.avgEffort.toFixed(1) : "—"}</td>
                           </tr>

@@ -143,7 +143,7 @@ const LOW_IMPACT_IDS = new Set(["brisk-walk", "lateral-steps", "bike-intervals"]
 export function buildSessionExercise(
   state: AppState,
   exerciseId: string,
-  target: { sets: number; repMin: number; repMax: number; repsLabel: string; restSec: number; targetWeight?: number | null },
+  target: { sets: number; repMin: number; repMax: number; repsLabel: string; restSec: number; targetWeight?: number | null; optional?: boolean },
   opts: { isExtra?: boolean; substitutedFrom?: SessionExercise["substitutedFrom"]; unit: WorkoutSession["unit"] },
 ): SessionExercise {
   const ex = state.exercises.find((e) => e.id === exerciseId);
@@ -168,13 +168,19 @@ export function buildSessionExercise(
     const side = sided ? (i % 2 === 0 ? "right" : "left") : null;
     const base: Partial<LoggedSet> = { side };
     switch (tracking) {
+      // Reps are pre-filled with the plan target; the actual reps are typed over it.
       case "weighted":
         base.weight = targetWeight;
-        base.reps = p?.reps ?? target.repMin;
+        base.reps = target.repMin;
         break;
       case "bodyweight":
       case "reps-side":
-        base.reps = p?.reps ?? target.repMin;
+        base.reps = target.repMin;
+        break;
+      case "cardio":
+        base.durationSec = p?.durationSec ?? null;
+        base.distance = p?.distance ?? null;
+        base.distanceUnit = p?.distanceUnit ?? "mi";
         break;
       case "timed":
         base.durationSec = p?.durationSec ?? target.repMin;
@@ -203,6 +209,7 @@ export function buildSessionExercise(
     restSec: target.restSec,
     targetWeight: tracking === "weighted" ? targetWeight : null,
     status: "pending",
+    optional: !!target.optional,
     substitutedFrom: opts.substitutedFrom ?? null,
     isExtra: !!opts.isExtra,
     sets,
@@ -415,7 +422,7 @@ export function finishWorkout(final: {
     modified: final.modified,
     intensity: final.intensity,
     location: final.location,
-    completion: exercises.length > 0 && exercises.every((e) => e.status !== "pending") ? "complete" : "partial",
+    completion: exercises.length > 0 && exercises.every((e) => e.status !== "pending" || e.optional) ? "complete" : "partial",
     pausedAt: null,
     conditioningSessionId: conditioningSession?.id ?? null,
     restTimer: { ...active.restTimer, endsAt: null, remainingSec: null },

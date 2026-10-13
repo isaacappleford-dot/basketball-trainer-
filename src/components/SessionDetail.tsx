@@ -21,6 +21,9 @@ function setText(s: LoggedSet, e: SessionExercise) {
     case "timed":
       main = `${s.durationSec ?? 0} s`;
       break;
+    case "cardio":
+      main = `${Math.round(((s.durationSec ?? 0) / 60) * 10) / 10} min${s.distance ? ` · ${s.distance} ${s.distanceUnit}` : ""}`;
+      break;
     case "distance":
       main = `${s.reps ?? 0} × ${s.distance ?? "—"} ${s.distanceUnit}`;
       break;

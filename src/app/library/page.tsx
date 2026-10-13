@@ -18,6 +18,7 @@ const TRACKING_LABELS: Record<TrackingType, string> = {
   timed: "Time (seconds)",
   distance: "Reps × distance",
   shooting: "Makes / attempts",
+  cardio: "Duration (minutes)",
 };
 
 export default function LibraryPage() {

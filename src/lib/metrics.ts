@@ -81,6 +81,8 @@ export interface ExerciseHistoryPoint {
   bestReps: number | null;
   volume: number;
   avgEffort: number | null;
+  /** Total minutes (cardio / timed exercises). */
+  minutes: number;
   setDetails: LoggedSet[];
 }
 
@@ -112,6 +114,7 @@ export function exerciseHistory(state: AppState, exerciseId: string, unit: Weigh
         bestReps: reps.length ? Math.max(...reps) : null,
         volume: sum(sets.map((x) => (setWeightIn(x, unit) ?? 0) * (x.reps ?? 0))),
         avgEffort: average(sets.filter((x) => x.effort !== null).map((x) => x.effort!)),
+        minutes: Math.round((sum(sets.map((x) => x.durationSec ?? 0)) / 60) * 10) / 10,
         setDetails: sets,
       });
     }

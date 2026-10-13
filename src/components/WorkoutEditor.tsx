@@ -186,7 +186,7 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
                     <Field label="Rest (s)" htmlFor={`${e.id}-rest`}>
                       <Input id={`${e.id}-rest`} type="number" inputMode="numeric" value={e.restSec} onChange={(ev) => setEx(i, { restSec: num(ev.target.value) })} />
                     </Field>
-                    <Field label={`Weight (${state.profile.units})`} htmlFor={`${e.id}-wt`} hint="Optional">
+                    <Field label={`Ref. weight (${state.profile.units})`} htmlFor={`${e.id}-wt`} hint="Optional starting weight">
                       <Input
                         id={`${e.id}-wt`}
                         type="number"
@@ -209,6 +209,10 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
                     <Field label="Notes" htmlFor={`${e.id}-notes`} className="col-span-2 sm:col-span-3">
                       <Input id={`${e.id}-notes`} value={e.notes} onChange={(ev) => setEx(i, { notes: ev.target.value })} />
                     </Field>
+                    <label className="col-span-2 flex items-center gap-2 self-end pb-3 text-sm sm:col-span-1">
+                      <input type="checkbox" checked={!!e.optional} onChange={(ev) => setEx(i, { optional: ev.target.checked })} className="h-5 w-5 accent-[var(--accent)]" />
+                      Optional
+                    </label>
                   </div>
                 </li>
               ))}

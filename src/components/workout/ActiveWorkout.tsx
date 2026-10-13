@@ -41,6 +41,8 @@ function describeSet(s: LoggedSet, t: SessionExercise["trackingType"]): string {
       return `${s.makes ?? 0}/${s.attempts ?? 0}${side}`;
     case "timed":
       return `${s.durationSec ?? 0}s`;
+    case "cardio":
+      return `${Math.round(((s.durationSec ?? 0) / 60) * 10) / 10} min${s.distance ? ` · ${s.distance} ${s.distanceUnit}` : ""}`;
     case "distance":
       return `${s.reps ?? 0}×${s.distance ?? "—"}${s.distanceUnit}`;
     default:
@@ -252,6 +254,7 @@ export function ActiveWorkout({ session, onFinished }: { session: WorkoutSession
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {ex.substitutedFrom && <Badge tone="accent">Substituted for {ex.substitutedFrom.name}</Badge>}
                 {ex.isExtra && <Badge>Extra exercise</Badge>}
+                {ex.optional && <Badge>Optional</Badge>}
                 {ex.status === "skipped" && <Badge tone="warn">Skipped</Badge>}
                 {ex.status === "done" && <Badge tone="good">Complete</Badge>}
               </div>

@@ -106,7 +106,7 @@ function FinishDialogInner({ onClose, session, elapsedSec, onFinished }: { onClo
 
       <div className="mt-4 space-y-2 text-sm">
         {skipped.length > 0 && <p className="text-muted">Skipped: {skipped.map((e) => e.name).join(", ")}</p>}
-        {notStarted.length > 0 && <p className="text-muted">Not logged: {notStarted.map((e) => e.name).join(", ")}</p>}
+        {notStarted.length > 0 && <p className="text-muted">Not logged: {notStarted.map((e) => `${e.name}${e.optional ? " (optional)" : ""}`).join(", ")}</p>}
         {cond && (
           <p className="text-muted">
             Conditioning: {cond.enabled ? `${cond.completedRounds}/${cond.plannedRounds} rounds` : `skipped${cond.skippedReason ? ` (${cond.skippedReason.toLowerCase()})` : ""}`}

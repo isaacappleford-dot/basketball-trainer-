@@ -14,6 +14,7 @@ export function validateSet(set: LoggedSet, ex: SessionExercise): string | null 
       if (set.makes > set.attempts) return "Makes can't exceed attempts.";
       return null;
     case "timed":
+    case "cardio":
       return set.durationSec && set.durationSec > 0 ? null : "Enter a duration.";
     default:
       return set.reps !== null && set.reps > 0 ? null : "Enter reps.";
@@ -66,6 +67,19 @@ export function SetRow({
       <>
         <NumberStepper label={`${isOutlet ? "Accurate outlets" : "Makes"} for ${label}`} value={set.makes} onChange={(v) => onChange({ makes: v })} suffix={isOutlet ? "acc" : "made"} />
         <NumberStepper label={`${isOutlet ? "Reps" : "Attempts"} for ${label}`} value={set.attempts} onChange={(v) => onChange({ attempts: v })} suffix={isOutlet ? "reps" : "att"} />
+      </>
+    );
+  } else if (t === "cardio") {
+    fields = (
+      <>
+        <NumberStepper
+          label={`Minutes for ${label}`}
+          value={set.durationSec === null ? null : Math.round((set.durationSec / 60) * 10) / 10}
+          onChange={(v) => onChange({ durationSec: v === null ? null : Math.round(v * 60) })}
+          step={1}
+          suffix="min"
+        />
+        <NumberStepper label={`Distance for ${label}`} value={set.distance} onChange={(v) => onChange({ distance: v })} step={0.1} suffix={set.distanceUnit} placeholder="opt." />
       </>
     );
   } else if (t === "timed") {
