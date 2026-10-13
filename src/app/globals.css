@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+/* Theme is applied via data-theme on <html>. Dark is the default. */
+:root,
+:root[data-theme="dark"] {
+  --bg: #0f1012;
+  --surface: #17181b;
+  --surface-2: #1f2024;
+  --surface-3: #28292e;
+  --line: #2c2e33;
+  --line-strong: #3a3c42;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --subtle: #71717a;
+  --accent: #ee7a2b;
+  --accent-strong: #f28b42;
+  --accent-ink: #1a0d03;
+  --accent-soft: rgba(238, 122, 43, 0.12);
+  --good: #4ade80;
+  --good-soft: rgba(74, 222, 128, 0.12);
+  --warn: #facc15;
+  --warn-soft: rgba(250, 204, 21, 0.12);
+  --bad: #f87171;
+  --bad-soft: rgba(248, 113, 113, 0.12);
+  --chart-1: #dc7024;
+  --chart-2: #4a8ae0;
+  --chart-3: #2fa877;
+  --grid: #26282c;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f5f3;
+  --surface: #ffffff;
+  --surface-2: #f4f4f2;
+  --surface-3: #e9e9e6;
+  --line: #e4e4e0;
+  --line-strong: #d0d0cb;
+  --text: #17181b;
+  --muted: #55575e;
+  --subtle: #7a7c83;
+  --accent: #c85a0c;
+  --accent-strong: #b04f0a;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(200, 90, 12, 0.1);
+  --good: #15803d;
+  --good-soft: rgba(21, 128, 61, 0.1);
+  --warn: #a16207;
+  --warn-soft: rgba(161, 98, 7, 0.1);
+  --bad: #b91c1c;
+  --bad-soft: rgba(185, 28, 28, 0.08);
+  --chart-1: #d9650f;
+  --chart-2: #2f6fd0;
+  --chart-3: #178a5c;
+  --grid: #ebebe7;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Arial Narrow", "Roboto Condensed", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  /* Keep focused/scrolled-to elements clear of the sticky header, rest timer and bottom nav. */
+  scroll-padding-top: 72px;
+  scroll-padding-bottom: 200px;
+}
+@media (min-width: 1024px) {
+  html {
+    scroll-padding-top: 16px;
+    scroll-padding-bottom: 120px;
+  }
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-stretch: condensed;
+  letter-spacing: 0.01em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Hide number spinners; we provide large steppers instead. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Recharts tweaks */
+.recharts-cartesian-grid line {
+  stroke: var(--grid);
+}
+.recharts-text {
+  fill: var(--subtle);
+  font-size: 11px;
+}
+.recharts-default-tooltip {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 10px !important;
+}
+.recharts-surface:focus,
+.recharts-wrapper:focus {
+  outline: none;
+}
