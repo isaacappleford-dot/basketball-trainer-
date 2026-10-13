@@ -2,6 +2,12 @@
 
 A training tracker for a basketball center. It runs an 8-week, four-day plan covering strength, speed, conditioning, post skills, rebounding, defense and recovery. It works in the browser on iPhone, tablet and desktop, keeps your data across reloads, and needs no accounts or API keys.
 
+## Live app
+
+**https://isaacappleford-dot.github.io/basketball-trainer-/**
+
+Every push to `claude/center-performance-app` (or `main`) rebuilds the site with the GitHub Actions workflow in `.github/workflows/pages.yml`, which exports a static build and publishes it to GitHub Pages. On a phone, open the link and use **Share → Add to Home Screen** (Safari) or **Install app** (Chrome). Your data stays in that browser.
+
 ## Quick start
 
 Requirements: **Node.js 20.9 or newer** (tested on Node 22) and npm.
