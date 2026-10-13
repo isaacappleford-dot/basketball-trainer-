@@ -7,7 +7,7 @@
  */
 import type { AppState, ISODate } from "./types";
 import { hardSessionDates, latestRecovery, weekSummary } from "./metrics";
-import { currentWeekOccurrences, daySlotFor, occurrencesBetween, occurrencesOn, type Occurrence } from "./schedule";
+import { currentWeekOccurrences, daySlotFor, isBlockedDay, occurrencesBetween, occurrencesOn, type Occurrence } from "./schedule";
 import { addDays, daysBetween, formatDate, startOfWeek, todayISO } from "./utils";
 
 export type AdviceAction =
@@ -26,13 +26,14 @@ export interface Advice {
 
 const dayName = (d: ISODate) => formatDate(d, { weekday: "long" });
 
-/** A day with no planned workout that isn't the rest day — never suggests Sunday. */
+/** A day with no planned workout that isn't a rest or unavailable day — never suggests Sunday or Wednesday. */
 function freeDay(state: AppState, from: ISODate, to: ISODate, avoid: ISODate[] = []): ISODate | null {
   const span = daysBetween(from, to);
   for (let i = 0; i <= span; i++) {
     const d = addDays(from, i);
     if (avoid.includes(d)) continue;
-    if (daySlotFor(state, d)?.kind === "rest") continue;
+    const kind = daySlotFor(state, d)?.kind;
+    if (kind === "rest" || kind === "unavailable") continue;
     if (occurrencesOn(state, d).some((o) => o.status !== "skipped")) continue;
     return d;
   }
@@ -44,6 +45,8 @@ function isIntense(o: Occurrence) {
 }
 
 export function weeklyAdvice(state: AppState, today: ISODate = todayISO()): Advice[] {
+  // Blocked (unavailable) day: no workout suggestions or reminders at all.
+  if (isBlockedDay(state, today)) return [];
   const out: Advice[] = [];
   const weekStart = startOfWeek(today);
   const weekEnd = addDays(weekStart, 6);

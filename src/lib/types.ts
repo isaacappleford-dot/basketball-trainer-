@@ -173,7 +173,8 @@ export interface PlanPhase {
   guidance: string[];
 }
 
-export type DaySlotKind = "open-gym" | "flex" | "recovery" | "rest";
+/** "unavailable" = blocked day: you can't train, so nothing is ever scheduled or suggested on it. */
+export type DaySlotKind = "open-gym" | "flex" | "recovery" | "rest" | "unavailable";
 
 export interface DaySlot {
   weekday: number;

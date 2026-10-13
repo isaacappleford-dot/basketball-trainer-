@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Database, Download, Monitor, Moon, Palette, RotateCcw, Sun, Upload, User, Users } from "lucide-react";
 import type { AppState } from "@/lib/types";
 import { useAppState } from "@/lib/store";
+import { blockedWeekdays } from "@/lib/schedule";
 import { importState, resetAllData, setOpenGymDays, setWorkoutWeekday, updateProfile } from "@/lib/actions";
 import { makeBackup, validateBackup } from "@/lib/storage";
 import { CSV_DATASETS, toCSV, type CsvDataset } from "@/lib/exporters";
@@ -117,8 +118,9 @@ export default function SettingsPage() {
                       >
                         <option value="">Not scheduled (optional)</option>
                         {WEEKDAYS.map((d, i) => (
-                          <option key={d} value={i}>
+                          <option key={d} value={i} disabled={blockedWeekdays(state).includes(i)}>
                             {d}
+                            {blockedWeekdays(state).includes(i) ? " (unavailable)" : ""}
                           </option>
                         ))}
                       </Select>
@@ -137,14 +139,17 @@ export default function SettingsPage() {
             </CardTitle>
             <div className="grid grid-cols-7 gap-1" role="group" aria-label="Open gym days">
               {WEEK_ORDER.map((d) => {
-                const on = state.profile.openGymDays.includes(d);
+                const blocked = blockedWeekdays(state).includes(d);
+                const on = state.profile.openGymDays.includes(d) && !blocked;
                 return (
                   <button
                     key={d}
                     type="button"
                     aria-pressed={on}
+                    disabled={blocked}
+                    title={blocked ? "Unavailable day — open gym is never offered" : undefined}
                     onClick={() => setOpenGymDays(on ? state.profile.openGymDays.filter((x) => x !== d) : [...state.profile.openGymDays, d])}
-                    className={cn("h-11 rounded-xl text-xs font-semibold", on ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted hover:text-text")}
+                    className={cn("h-11 rounded-xl text-xs font-semibold", on ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted hover:text-text", blocked && "cursor-not-allowed line-through opacity-50")}
                   >
                     {WEEKDAYS_SHORT[d]}
                   </button>

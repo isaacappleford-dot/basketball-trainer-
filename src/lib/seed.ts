@@ -12,7 +12,7 @@ import type {
 } from "./types";
 import { startOfWeek, todayISO } from "./utils";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 const SEED_TIME = "2026-01-01T00:00:00.000Z";
 
 type ExerciseSeed = Omit<Exercise, "isCustom" | "isFavorite" | "createdAt" | "updatedAt">;
@@ -1224,7 +1224,7 @@ export function seedWorkouts(): PlannedWorkout[] {
       kind: "strength",
       emphasis: "upper",
       location: "gym",
-      weekday: 3,
+      weekday: 5,
       warmup: [
         W("d3w1", "Easy bike or treadmill walk: 4 minutes"),
         W("d3w2", "Arm circles: 10 in each direction"),
@@ -1293,19 +1293,19 @@ export function seedDaySlots(): DaySlot[] {
       weekday: 2,
       kind: "open-gym",
       label: "Optional open gym",
-      description: "Live basketball, defensive positioning, rebounding and game decisions. Go only if you want to.",
+      description: "Live basketball, defense, rebounding and game decisions. Go only if you want to.",
+    },
+    {
+      weekday: 3,
+      kind: "unavailable",
+      label: "Unavailable — blocked rest day",
+      description: "You can't train today. Nothing is scheduled and no workouts are suggested.",
     },
     {
       weekday: 4,
       kind: "flex",
       label: "Your choice",
-      description: "Open gym, a Home Court workout, recovery, or rest — pick what fits the week.",
-    },
-    {
-      weekday: 5,
-      kind: "recovery",
-      label: "Recovery or light shooting",
-      description: "Easy shooting or mobility if you feel like it. No workout required.",
+      description: "Optional open gym, home driveway shooting, recovery, or rest — pick what fits the week.",
     },
     { weekday: 0, kind: "rest", label: "Rest day", description: "No mandatory workout." },
   ];

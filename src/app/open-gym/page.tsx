@@ -6,7 +6,8 @@ import type { OpenGymSession } from "@/lib/types";
 import { useAppState } from "@/lib/store";
 import { deleteOpenGym, saveOpenGym, setOpenGymDays } from "@/lib/actions";
 import { weeklyBuckets, weekSummary } from "@/lib/metrics";
-import { addDays, cn, formatDate, nowISO, startOfWeek, sum, todayISO, weekdayOf, WEEK_ORDER, WEEKDAYS, WEEKDAYS_SHORT } from "@/lib/utils";
+import { blockedWeekdays, isOpenGymDay } from "@/lib/schedule";
+import { addDays, cn, formatDate, nowISO, startOfWeek, sum, todayISO, WEEK_ORDER, WEEKDAYS, WEEKDAYS_SHORT } from "@/lib/utils";
 import { INTENSITY_LABELS, OPEN_GYM_STATUS_LABELS } from "@/components/labels";
 import { newOpenGym, OpenGymForm } from "@/components/OpenGymForm";
 import { AdviceList } from "@/components/AdviceList";
@@ -22,7 +23,7 @@ export default function OpenGymPage() {
   const [form, setForm] = useState<OpenGymSession | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const ws = startOfWeek(today);
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(ws, i)).filter((d) => state.profile.openGymDays.includes(weekdayOf(d)));
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(ws, i)).filter((d) => isOpenGymDay(state, d));
   const all = [...state.openGymSessions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   const attended = all.filter((o) => o.status === "attended");
   const week = weekSummary(state);
@@ -128,15 +129,18 @@ export default function OpenGymPage() {
             </CardTitle>
             <div className="grid grid-cols-7 gap-1" role="group" aria-label="Open gym days">
               {WEEK_ORDER.map((d) => {
-                const on = state.profile.openGymDays.includes(d);
+                const blocked = blockedWeekdays(state).includes(d);
+                const on = state.profile.openGymDays.includes(d) && !blocked;
                 return (
                   <button
                     key={d}
                     type="button"
                     aria-pressed={on}
+                    disabled={blocked}
+                    title={blocked ? "Unavailable day — open gym is never offered" : undefined}
                     aria-label={`${WEEKDAYS[d]} ${on ? "available" : "not available"}`}
                     onClick={() => setOpenGymDays(on ? state.profile.openGymDays.filter((x) => x !== d) : [...state.profile.openGymDays, d])}
-                    className={cn("h-11 rounded-xl text-xs font-semibold", on ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted hover:text-text")}
+                    className={cn("h-11 rounded-xl text-xs font-semibold", on ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted hover:text-text", blocked && "cursor-not-allowed line-through opacity-50")}
                   >
                     {WEEKDAYS_SHORT[d]}
                   </button>

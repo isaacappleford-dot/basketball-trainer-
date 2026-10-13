@@ -3,7 +3,7 @@
  * and `validateBackup`, so swapping localStorage for a database later means
  * replacing this file (and making the store's writes async).
  */
-import type { AppState, PlannedWorkout, TrainingPlan, WorkoutSession } from "./types";
+import type { AppState, DaySlot, PlannedWorkout, TrainingPlan, WorkoutSession } from "./types";
 import { createInitialState, SCHEMA_VERSION } from "./seed";
 
 export const STORAGE_KEY = "center-performance:v1";
@@ -65,6 +65,9 @@ export function saveState(state: AppState): string | null {
 
 /** v1 defaults, used to tell untouched seed values from the athlete's own edits. */
 const V1_WEEKDAYS: Record<string, number> = { "pw-day1": 1, "pw-day2": 2, "pw-day3": 4, "pw-day4": 6 };
+/** v2 default weekdays that changed in v3 (Day B moved Wednesday → Friday). */
+const V2_WEEKDAYS: Record<string, number> = { "pw-day3": 3 };
+const V2_FRIDAY_LABEL = "Recovery or light shooting";
 const V1_ENVIRONMENT = "Full gym and basketball court";
 const V1_GOAL = "Become a more complete basketball center";
 
@@ -81,7 +84,8 @@ export function migrate(state: AppState): AppState {
   const workouts = (state.plan?.workouts ?? fresh.plan.workouts).map((w) => {
     const seed = seedWorkouts.get(w.id);
     const legacy = w as Partial<PlannedWorkout>;
-    const untouchedDay = version < 2 && seed && V1_WEEKDAYS[w.id] === w.weekday;
+    const untouchedDay =
+      (version < 2 && seed && V1_WEEKDAYS[w.id] === w.weekday) || (version < 3 && seed && V2_WEEKDAYS[w.id] === w.weekday);
     return {
       ...w,
       label: legacy.label ?? seed?.label ?? `Day ${w.dayNumber}`,
@@ -126,7 +130,7 @@ export function migrate(state: AppState): AppState {
       ...fresh.plan,
       ...plan,
       workouts,
-      daySlots: plan.daySlots ?? fresh.plan.daySlots,
+      daySlots: plan.daySlots ? migrateDaySlots(plan.daySlots, workouts, version, fresh.plan.daySlots) : fresh.plan.daySlots,
       weekAdjustments: plan.weekAdjustments ?? [],
     },
     exercises,
@@ -141,6 +145,21 @@ export function migrate(state: AppState): AppState {
     dismissedAdvice: state.dismissedAdvice ?? [],
     schemaVersion: SCHEMA_VERSION,
   };
+}
+
+/**
+ * v2 → v3: Wednesday becomes a blocked (unavailable) day and Friday becomes Day B.
+ * Only default slots are changed; anything the athlete customised is kept.
+ */
+function migrateDaySlots(slots: DaySlot[], workouts: PlannedWorkout[], version: number, defaults: DaySlot[]): DaySlot[] {
+  if (version >= 3) return slots;
+  const hasWorkout = (d: number) => workouts.some((w) => w.weekday === d);
+  let next = slots.filter((d) => !(d.weekday === 5 && d.kind === "recovery" && d.label === V2_FRIDAY_LABEL && hasWorkout(5)));
+  const wed = defaults.find((d) => d.weekday === 3)!;
+  if (!hasWorkout(3) && !next.some((d) => d.weekday === 3)) next = [...next, wed];
+  const thu = defaults.find((d) => d.weekday === 4)!;
+  next = next.map((d) => (d.weekday === 4 && d.kind === "flex" && d.label === thu.label ? { ...d, description: thu.description } : d));
+  return next.sort((a, b) => a.weekday - b.weekday);
 }
 
 function migrateSession(s: WorkoutSession): WorkoutSession {

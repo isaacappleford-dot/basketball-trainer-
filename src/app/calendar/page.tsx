@@ -10,7 +10,7 @@ import { completedSessions, weekSummary } from "@/lib/metrics";
 import { saveOpenGym } from "@/lib/actions";
 import { STATUS_TONE, OPEN_GYM_STATUS_LABELS } from "@/components/labels";
 import { newOpenGym, OpenGymForm } from "@/components/OpenGymForm";
-import { calendarWeekOf, occurrencesBetween, planWeekFor, type Occurrence } from "@/lib/schedule";
+import { isOpenGymDay, isBlockedDay, calendarWeekOf, occurrencesBetween, planWeekFor, type Occurrence } from "@/lib/schedule";
 import { addDays, cn, daysBetween, formatDate, formatLongDate, nowISO, parseISODate, startOfWeek, toISODate, todayISO, uid, weekdayOf, WEEKDAYS_SHORT } from "@/lib/utils";
 import { MOD_REASONS } from "@/components/workout/FinishDialog";
 import { Badge, Button, Card, CardTitle, ConfirmDialog, Field, IconButton, Input, LinkButton, Modal, PageHeader, Segmented, Select, Textarea, useToast } from "@/components/ui";
@@ -52,7 +52,7 @@ function buildDays(state: AppState, from: ISODate, to: ISODate): Map<ISODate, Da
       events: [],
       extras: [],
       openGym: [],
-      openGymAvailable: state.profile.openGymDays.includes(weekdayOf(d)),
+      openGymAvailable: isOpenGymDay(state, d),
       slot,
       restLabel: slot?.label ?? null,
     });
@@ -170,6 +170,7 @@ export default function CalendarPage() {
                 className={cn(
                   "flex h-full min-h-[88px] w-full flex-col gap-1.5 rounded-2xl border p-3 text-left transition-colors hover:border-line-strong lg:min-h-[180px]",
                   d.date === today ? "border-accent/60 bg-accent-soft" : "border-line bg-surface",
+                  d.slot?.kind === "unavailable" && "border-dashed bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,var(--surface-2)_6px,var(--surface-2)_12px)]",
                 )}
                 aria-label={`${formatLongDate(d.date)}: ${d.occurrences.length + d.events.length + d.extras.length} items`}
               >
@@ -199,6 +200,7 @@ export default function CalendarPage() {
                     className={cn(
                       "flex h-16 w-full flex-col items-start gap-1 overflow-hidden rounded-xl border p-1.5 text-left sm:h-24 sm:p-2",
                       d.date === today ? "border-accent/60 bg-accent-soft" : "border-line bg-surface hover:border-line-strong",
+                      d.slot?.kind === "unavailable" && "border-dashed bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,var(--surface-2)_6px,var(--surface-2)_12px)]",
                       other && "opacity-40",
                     )}
                   >
@@ -347,7 +349,10 @@ function DayPanel({ day, onClose }: { day: DayData; onClose: () => void }) {
                   <p className="mt-0.5 text-sm text-muted">{day.slot.description}</p>
                 </>
               )}
-              {day.slot?.kind !== "rest" && (
+              {day.slot?.kind === "unavailable" && (
+                <p className="mt-2 text-xs text-subtle">Blocked: workouts can&apos;t be moved here and no reminders or suggestions appear for this day.</p>
+              )}
+              {day.slot?.kind !== "rest" && day.slot?.kind !== "unavailable" && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {day.openGymAvailable && !day.openGym.length && (
                     <>
@@ -441,6 +446,7 @@ function DayPanel({ day, onClose }: { day: DayData; onClose: () => void }) {
                   <Button
                     onClick={() => {
                       if (!/^\d{4}-\d{2}-\d{2}$/.test(moveDate)) return setError("Pick a date.");
+                      if (isBlockedDay(state, moveDate)) return setError(`${formatDate(moveDate, { weekday: "long" })} is blocked — you're unavailable. Pick another day.`);
                       setError(null);
                       if (moveDate === o.originalDate && !o.override?.status) clearOverride(o.plannedId, o.originalDate);
                       else overrideOccurrence(o.plannedId, o.originalDate, { date: moveDate, status: o.override?.status ?? "scheduled" });

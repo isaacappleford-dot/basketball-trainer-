@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Activity,
+  Ban,
   BedDouble,
   CalendarDays,
   CheckCircle2,
@@ -65,6 +66,7 @@ export default function Dashboard() {
   const rec7 = recoveryAverages(recEntries.filter((r) => r.date >= addDays(today, -6)));
   const recNotes = [...recEntries].reverse().filter((r) => r.notes).slice(0, 3);
   const slot = daySlotFor(state, today);
+  const blockedToday = slot?.kind === "unavailable";
   const openGymToday = isOpenGymDay(state, today);
   const plannedOpenGymToday = state.openGymSessions.find((o) => o.date === today);
 
@@ -150,6 +152,11 @@ export default function Dashboard() {
               <span className="text-subtle">Next session:</span> {next.workout.label} — {next.workout.name}, {formatDate(next.date, { weekday: "long", month: "short", day: "numeric" })}
             </p>
           )}
+          {blockedToday ? (
+            <p className="mt-5 flex items-center gap-2 rounded-xl bg-surface-2 px-4 py-3 text-sm text-muted">
+              <Ban size={16} className="shrink-0" /> Blocked day — no workouts or reminders today. Enjoy the rest.
+            </p>
+          ) : (
           <div className="mt-5 flex flex-wrap gap-2">
             {todayPlanned ? (
               <LinkButton href={`/workout?plan=${todayPlanned.workout.id}&date=${today}&scheduled=${todayPlanned.originalDate}`} size="xl">
@@ -171,6 +178,7 @@ export default function Dashboard() {
               </LinkButton>
             )}
           </div>
+          )}
         </Card>
 
         {/* Week balance */}
@@ -244,6 +252,7 @@ export default function Dashboard() {
             icon={<Activity size={22} />}
             title="Your training history starts with your first session"
             action={
+              blockedToday ? undefined : (
               <div className="flex flex-wrap justify-center gap-2">
                 <LinkButton href="/workout" size="lg">
                   <Play size={18} /> Start first workout
@@ -255,6 +264,7 @@ export default function Dashboard() {
                   Log a check-in
                 </LinkButton>
               </div>
+              )
             }
           >
             Stats, charts and personal records appear once you log real workouts, open gym, Home Court sessions, conditioning or recovery check-ins.

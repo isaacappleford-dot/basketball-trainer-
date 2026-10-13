@@ -45,7 +45,7 @@ export function Onboarding() {
           ))}
         </ul>
         <p className="mt-3 text-xs text-subtle">
-          Two gym strength days and two basketball-focused sessions per week. Open gym is available Monday–Thursday, but you choose when to go. Everything can be moved, skipped or swapped.
+          Two gym strength days (Monday and Friday) and two basketball-focused sessions per week. Open gym is available Monday–Thursday, but you choose when to go — never every day. Wednesday is blocked: nothing is scheduled. Everything else can be moved, skipped or swapped.
         </p>
       </Card>
 

@@ -9,6 +9,7 @@ const SLOT_DESCRIPTIONS: Record<DaySlotKind, string> = {
   flex: "Open gym, a Home Court workout, recovery, or rest — pick what fits the week.",
   recovery: "Easy shooting or mobility if you feel like it. No workout required.",
   rest: "No mandatory workout.",
+  unavailable: "You can't train today. Nothing is scheduled and no workouts are suggested.",
 };
 import { useAppState } from "@/lib/store";
 import {
@@ -23,7 +24,7 @@ import {
 } from "@/lib/actions";
 import { LOCATION_LABELS, SLOT_LABELS } from "@/components/labels";
 import { progressionReport } from "@/lib/progression";
-import { weekInfo } from "@/lib/schedule";
+import { blockedWeekdays, weekInfo } from "@/lib/schedule";
 import { addDays, cn, formatDate, WEEK_ORDER, WEEKDAYS } from "@/lib/utils";
 import { WorkoutEditor } from "@/components/WorkoutEditor";
 import { Alert, Badge, Button, Card, CardTitle, ConfirmDialog, LinkButton, PageHeader, Select, useToast } from "@/components/ui";
@@ -247,10 +248,17 @@ export default function PlanPage() {
         </CardTitle>
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
           {schedule.map(({ day, workout, slot }) => (
-            <li key={day} className={cn("flex flex-col gap-1.5 rounded-xl p-3 text-sm", workout.length ? "bg-accent-soft" : "bg-surface-2")}>
+            <li
+              key={day}
+              className={cn(
+                "flex flex-col gap-1.5 rounded-xl p-3 text-sm",
+                workout.length ? "bg-accent-soft" : "bg-surface-2",
+                slot?.kind === "unavailable" && "border border-dashed border-line-strong",
+              )}
+            >
               <p className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle">
                 {WEEKDAYS[day].slice(0, 3)}
-                {state.profile.openGymDays.includes(day) && (
+                {state.profile.openGymDays.includes(day) && slot?.kind !== "unavailable" && (
                   <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-muted" title="Open gym available">
                     OG
                   </span>
@@ -328,8 +336,9 @@ export default function PlanPage() {
               >
                 <option value="">Not scheduled</option>
                 {WEEKDAYS.map((d, i) => (
-                  <option key={d} value={i}>
+                  <option key={d} value={i} disabled={blockedWeekdays(state).includes(i)}>
                     {d}
+                    {blockedWeekdays(state).includes(i) ? " (unavailable)" : ""}
                   </option>
                 ))}
               </Select>
@@ -398,7 +407,7 @@ export default function PlanPage() {
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
         title="Restore the default plan?"
-        message="All workouts and the weekly structure return to their defaults (Mon Day A, Tue optional open gym, Wed Day B, Thu your choice, Fri recovery, Sat center skills, Sun rest). Your history is not affected."
+        message="All workouts and the weekly structure return to their defaults (Mon Day A, Tue optional open gym, Wed unavailable, Thu your choice, Fri Day B, Sat center skills, Sun rest). Your history is not affected."
         confirmLabel="Restore defaults"
         onConfirm={() => {
           resetPlanWorkouts();

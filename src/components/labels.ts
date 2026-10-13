@@ -17,6 +17,7 @@ export const SLOT_LABELS: Record<DaySlotKind, string> = {
   flex: "Your choice",
   recovery: "Recovery / light shooting",
   rest: "Rest",
+  unavailable: "Unavailable (blocked)",
 };
 
 export const OPEN_GYM_STATUS_LABELS: Record<OpenGymStatus, string> = {

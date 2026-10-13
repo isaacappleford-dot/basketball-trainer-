@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ConditioningModality, PlannedExercise, PlannedWorkout } from "@/lib/types";
 import { useAppState } from "@/lib/store";
 import { updatePlannedWorkout } from "@/lib/actions";
+import { blockedWeekdays } from "@/lib/schedule";
 import { uid, WEEKDAYS } from "@/lib/utils";
 import { MODALITY_LABELS } from "./ProfileForm";
 import { LOCATION_LABELS } from "./labels";
@@ -39,6 +40,7 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
     const errs: string[] = [];
     if (!draft.name.trim()) errs.push("Workout name is required.");
     if (!draft.label.trim()) errs.push("Short label is required.");
+    if (draft.weekday !== null && blockedWeekdays(state).includes(draft.weekday)) errs.push(`${WEEKDAYS[draft.weekday]} is marked unavailable — pick another day.`);
     draft.exercises.forEach((e) => {
       if (!(e.sets >= 1 && e.sets <= 10)) errs.push(`${name(e.exerciseId)}: sets must be 1–10.`);
       if (!(e.repMin >= 0 && e.repMax >= e.repMin)) errs.push(`${name(e.exerciseId)}: rep range minimum must not exceed maximum.`);
@@ -97,8 +99,9 @@ export function WorkoutEditor({ workout, onClose }: { workout: PlannedWorkout; o
               <Select id="we-day" value={draft.weekday ?? ""} onChange={(e) => set({ weekday: e.target.value === "" ? null : Number(e.target.value) })}>
                 <option value="">Not scheduled (optional)</option>
                 {WEEKDAYS.map((d, i) => (
-                  <option key={d} value={i}>
+                  <option key={d} value={i} disabled={blockedWeekdays(state).includes(i)}>
                     {d}
+                    {blockedWeekdays(state).includes(i) ? " (unavailable)" : ""}
                   </option>
                 ))}
               </Select>

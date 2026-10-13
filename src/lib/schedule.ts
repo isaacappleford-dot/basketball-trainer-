@@ -92,6 +92,7 @@ export function occurrencesBetween(state: AppState, from: ISODate, to: ISODate):
   const openGym = (state.openGymSessions ?? []).filter((o) => o.status === "attended" && o.countsFor);
   const home = state.skillSessions.filter((s) => s.countsFor);
   const today = todayISO();
+  const blocked = blockedWeekdays(state);
   const result: Occurrence[] = [];
 
   const build = (planned: PlannedWorkout, originalDate: ISODate, override: CalendarEvent | null): Occurrence => {
@@ -137,6 +138,7 @@ export function occurrencesBetween(state: AppState, from: ISODate, to: ISODate):
     const date = addDays(from, i);
     if (!isWithinPlan(state, date)) continue;
     const dow = weekdayOf(date);
+    if (blocked.includes(dow)) continue; // unavailable day: never generate planned workouts
     for (const w of state.plan.workouts) {
       if (w.weekday === null || w.weekday !== dow) continue;
       const ov = overrideByKey.get(occurrenceKey(w.id, date)) ?? null;
@@ -164,8 +166,18 @@ export function daySlotFor(state: AppState, date: ISODate) {
   return state.plan.daySlots.find((d) => d.weekday === weekdayOf(date)) ?? null;
 }
 
+/** Weekdays marked unavailable (blocked): nothing is ever scheduled or suggested on them. */
+export function blockedWeekdays(state: AppState): number[] {
+  return state.plan.daySlots.filter((d) => d.kind === "unavailable").map((d) => d.weekday);
+}
+
+export function isBlockedDay(state: AppState, date: ISODate) {
+  return blockedWeekdays(state).includes(weekdayOf(date));
+}
+
+/** Open gym is offered only on available, non-blocked days — and is never scheduled automatically. */
 export function isOpenGymDay(state: AppState, date: ISODate) {
-  return state.profile.openGymDays.includes(weekdayOf(date));
+  return state.profile.openGymDays.includes(weekdayOf(date)) && !isBlockedDay(state, date);
 }
 
 export function occurrencesOn(state: AppState, date: ISODate): Occurrence[] {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Intensity, OpenGymSession, OpenGymStatus } from "@/lib/types";
 import { useAppState } from "@/lib/store";
 import { saveOpenGym } from "@/lib/actions";
-import { currentWeekOccurrences } from "@/lib/schedule";
+import { currentWeekOccurrences, isBlockedDay } from "@/lib/schedule";
 import { cn, formatDate, nowISO, todayISO, uid } from "@/lib/utils";
 import { INTENSITY_OPTIONS, OPEN_GYM_SKILLS, OPEN_GYM_STATUS_LABELS } from "./labels";
 import { Alert, Button, Checkbox, ConfirmDialog, Field, Input, Modal, Rating, Segmented, Select, Textarea, useToast, useUnsavedWarning } from "./ui";
@@ -62,6 +62,7 @@ export function OpenGymForm({ initial, onClose, onSaved }: { initial: OpenGymSes
       if (!o.format) errs.push("Choose full-court, half-court or drills.");
       if (linkedIsStrength && !strengthConfirm) errs.push("Confirm that you want to replace a strength workout with open gym, or pick a different link.");
     }
+    if (o.status === "planned" && isBlockedDay(state, o.date)) errs.push("That day is marked unavailable — open gym can't be planned on it.");
     if (o.status === "replaced" && !o.replacedWith.trim()) errs.push("Say what you did instead (e.g. home shooting, recovery).");
     setErrors(errs);
     if (errs.length) return;

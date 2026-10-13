@@ -8,7 +8,7 @@ import type { ModificationReason, PlannedWorkout } from "@/lib/types";
 import { useAppState } from "@/lib/store";
 import { startWorkout } from "@/lib/actions";
 import { latestRecovery, recoveryAdvice, weekSummary } from "@/lib/metrics";
-import { daySlotFor, matchOccurrence, nextOccurrence, occurrencesOn, weekInfo } from "@/lib/schedule";
+import { daySlotFor, isOpenGymDay, matchOccurrence, nextOccurrence, occurrencesOn, weekInfo } from "@/lib/schedule";
 import { shouldShortenConditioning } from "@/lib/advice";
 import { KIND_LABELS } from "@/components/labels";
 import { daysBetween, formatDate, formatLongDate, todayISO, WEEKDAYS } from "@/lib/utils";
@@ -159,7 +159,9 @@ function StartScreen() {
               Next up: {next.workout.label} — {next.workout.name} on {formatDate(next.date, { weekday: "long", month: "short", day: "numeric" })}
             </p>
           )}
-          <p className="mt-2 text-sm text-muted">You can still start any session below — it will count toward the matching workout this week.</p>
+          {daySlotFor(state, today)?.kind !== "unavailable" && (
+            <p className="mt-2 text-sm text-muted">You can still start any session below — it will count toward the matching workout this week.</p>
+          )}
         </Card>
       )}
 
@@ -383,9 +385,10 @@ function SlotActions() {
   const state = useAppState();
   const today = todayISO();
   const slot = daySlotFor(state, today);
-  const openGym = state.profile.openGymDays.includes(new Date().getDay());
+  const openGym = isOpenGymDay(state, today);
   if (!slot && !openGym) return null;
   if (slot?.kind === "rest") return <p className="mt-2 text-sm text-muted">Enjoy the day off — nothing is scheduled.</p>;
+  if (slot?.kind === "unavailable") return <p className="mt-2 text-sm text-muted">You&apos;re unavailable today, so nothing is scheduled or suggested.</p>;
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {openGym && slot?.kind !== "recovery" && (
